@@ -1,0 +1,189 @@
+datasource db {
+  provider = "mysql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Member {
+  id        String   @id @default(cuid())
+  name      String
+  funcao    String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id            String          @id
+  name          String
+  category      String
+  uom           String          @default("sc")
+  weight        Float           @default(0)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  orderItems    OrderItem[]
+  priceItems    PriceTableItem[]
+}
+
+model PriceTable {
+  id     String           @id
+  name   String
+  prices PriceTableItem[]
+  orders Order[]
+}
+
+model PriceTableItem {
+  id           String     @id @default(cuid())
+  priceTableId String
+  productId    String
+  price        Float
+  priceTable   PriceTable @relation(fields: [priceTableId], references: [id], onDelete: Cascade)
+  product      Product    @relation(fields: [productId], references: [id])
+
+  @@unique([priceTableId, productId])
+}
+
+model Customer {
+  id       String   @id @default(cuid())
+  name     String
+  cpfcnpj  String?
+  IE       String?
+  phone    String?
+  email    String?
+  address  String?
+  city     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  orders   Order[]
+}
+
+model Order {
+  id               String           @id
+  customerId       String
+  customerName     String
+  customerEmail    String?
+  customerPhone    String?
+  customerAddress  String?
+  customerDocument String?
+  city             String?
+  status           OrderStatus      @default(PENDENTE)
+  productionStage  ProductionStage?
+  paymentCondition String
+  seller           String
+  closedBy         String?
+  user             String
+  priceTableId     String?
+  totalValue       Float            @default(0)
+  totalWeight      Float            @default(0)
+  observations     String?
+
+  // Logística
+  assignedVehicleId     String?
+  assignedDriverId      String?
+  scheduledDeliveryDate DateTime?
+  departureTime         DateTime?
+  deliveryDate          DateTime?
+  deliveredAt           DateTime?
+
+  // Faturamento
+  invoicedAt        DateTime?
+  rejectedAt        DateTime?
+  nfNumero          String?
+  vendaDiretaNumero String?
+
+  // Produção
+  loteId      String?
+  loteDate    DateTime?
+  approvedAt  DateTime?
+  viewedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items      OrderItem[]
+  priceTable PriceTable?  @relation(fields: [priceTableId], references: [id])
+  customer   Customer     @relation(fields: [customerId], references: [id])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(COMERCIAL)
+  active    Boolean  @default(true)
+  lastLogin DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrderItem {
+  id         String  @id @default(cuid())
+  orderId    String
+  productId  String
+  quantity   Float
+  price      Float
+  finalPrice Float?
+  discount   Float   @default(0)
+  order      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product @relation(fields: [productId], references: [id])
+}
+
+model Vehicle {
+  id         String   @id @default(cuid())
+  plate      String   @unique
+  model      String
+  type       String
+  capacityKg Float
+  status     String   @default("DISPONIVEL")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Driver {
+  id        String   @id @default(cuid())
+  name      String
+  status    String   @default("DISPONIVEL")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DeliverySchedule {
+  id            String   @id @default(cuid())
+  vehicleId     String
+  driverId      String
+  scheduledDate DateTime
+  scheduledTime String?
+  status        String   @default("AGENDADO")
+  notes         String?
+  orderIds      Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+
+enum Role {
+  ADMIN
+  COMERCIAL
+  PRODUCAO
+  LOGISTICA
+}
+
+enum OrderStatus {
+  PENDENTE
+  PRODUCAO
+  PRONTO_LOGISTICA
+  ENTREGA
+  AGUARDANDO_FATURAMENTO
+  FATURADO
+  REJEITADO
+}
+
+enum ProductionStage {
+  FILA
+  PROCESSO
+  QUALIDADE
+  CONCLUIDO
+}

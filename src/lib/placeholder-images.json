@@ -1,0 +1,10 @@
+{
+  "placeholderImages": [
+    {
+      "id": "logo-novo-ciclo",
+      "description": "Logotipo oficial Novo Ciclo",
+      "imageUrl": "/logo.png",
+      "imageHint": "logonovociclo"
+    }
+  ]
+}

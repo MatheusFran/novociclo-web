@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 140 20% 98%; /* Off-white esverdeado */
+    --foreground: 210 20% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 210 20% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 20% 15%;
+    --primary: 153 67% 28%; /* Verde Novo Ciclo #156135 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 140 20% 90%;
+    --secondary-foreground: 153 67% 20%;
+    --muted: 140 20% 90%;
+    --muted-foreground: 210 10% 40%;
+    --accent: 84 50% 45%; /* Verde Folha */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 140 20% 85%;
+    --input: 140 20% 85%;
+    --ring: 153 67% 28%;
+    --radius: 0.75rem;
+    --chart-1: 153 67% 28%;
+    --chart-2: 84 50% 45%;
+    --chart-3: 30 40% 30%; /* Marrom */
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+  }
+  .dark {
+    --background: 153 30% 10%;
+    --foreground: 140 30% 95%;
+    --card: 153 30% 12%;
+    --card-foreground: 140 30% 95%;
+    --popover: 153 30% 12%;
+    --popover-foreground: 140 30% 95%;
+    --primary: 153 67% 38%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 153 30% 15%;
+    --secondary-foreground: 153 67% 80%;
+    --muted: 153 30% 15%;
+    --muted-foreground: 153 10% 60%;
+    --accent: 84 50% 45%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 153 30% 20%;
+    --input: 153 30% 20%;
+    --ring: 153 67% 38%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-headline;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+  
+  .print-only {
+    display: block !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+    font-size: 10pt;
+  }
+
+  .print-content {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .bg-primary, .bg-muted, .bg-accent, .bg-orange-50, .bg-blue-50, .bg-green-50, .bg-primary\/5, .bg-primary\/10 {
+    background: white !important;
+    color: black !important;
+    border: 1px solid black !important;
+  }
+
+  .print-table-header {
+    background-color: black !important;
+    color: white !important;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .print-line-field {
+    border-bottom: 1px solid black !important;
+    flex-grow: 1;
+    margin-left: 5px;
+    height: 1.2rem;
+  }
+}
+
+.print-only {
+  display: none;
+}
