@@ -4,9 +4,9 @@ import { authorizeAdmin } from '@/app/api/_lib/route-utils';
 
 export async function GET(
   _request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = context.params;
+  const { id } = await context.params;
 
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
