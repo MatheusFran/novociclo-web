@@ -21,7 +21,8 @@ export async function GET(
   }
 }
 
-export async function PATCH(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
@@ -40,7 +41,7 @@ export async function PATCH(_request: NextRequest, { params }: { params: Promise
     if (data.address !== undefined) updateData.address = data.address ? String(data.address).trim() : null;
     if (data.city !== undefined) updateData.city = data.city ? String(data.city).trim() : null;
 
-    const updated = await prisma.customer.update({ where: { id: params.id }, data: updateData });
+    const updated = await prisma.customer.update({ where: { id }, data: updateData });
     return NextResponse.json(updated);
   } catch (err) {
     console.error('[PATCH /api/customers/[id]] Error:', err);
