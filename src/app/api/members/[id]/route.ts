@@ -70,14 +70,15 @@ export async function PATCH(_request: NextRequest, context: { params: Promise<{ 
     }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const { id } = await context.params;
     const error = await authorizeAdmin();
     if (error) return NextResponse.json(error.body, { status: error.status });
 
     try {
         // Validar se o membro existe antes de deletar
         const existingMember = await prisma.member.findUnique({
-            where: { id: params.id }
+            where: { id }
         });
 
         if (!existingMember) {
@@ -85,13 +86,13 @@ export async function DELETE(_request: NextRequest, { params }: { params: { id: 
         }
 
         await prisma.member.update({
-            where: { id: params.id },
+            where: { id },
             data: { active: false }
         });
         return new NextResponse(null, { status: 204 });
     } catch (err) {
         console.error('[DELETE /api/members/:id] Error:', err);
-        logApiError('/api/members/:id', 'DELETE', err, { params });
+        logApiError('/api/members/:id', 'DELETE', err, { id });
         return NextResponse.json(
             { error: err instanceof Error ? err.message : 'Erro ao deletar membro' },
             { status: 400 }
