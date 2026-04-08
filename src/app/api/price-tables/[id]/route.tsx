@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
 import { authorizeAdmin } from '@/app/api/_lib/route-utils';
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   const item = await prisma.priceTable.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: { prices: true },
   });
 
@@ -19,8 +20,9 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   });
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const data = await request.json();
+export async function PATCH(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  const data = await _request.json();
 
   try {
     const updateData: any = {};
@@ -40,7 +42,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     const updated = await prisma.priceTable.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData,
       include: { prices: true },
     });
@@ -58,12 +60,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   try {
-    await prisma.priceTable.delete({ where: { id: params.id } });
+    await prisma.priceTable.delete({ where: { id } });
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     return NextResponse.json({ error: 'Unable to delete PriceTable' }, { status: 400 });

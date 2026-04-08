@@ -27,19 +27,20 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
     }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const { id } = await context.params;
     const error = await authorizeAdmin();
     if (error) return NextResponse.json(error.body, { status: error.status });
 
     try {
-        const data = await request.json();
+        const data = await _request.json();
         if (!data || Object.keys(data).length === 0) {
             return NextResponse.json({ error: 'Nenhum campo válido para atualizar' }, { status: 400 });
         }
 
         // Validar se o membro existe
         const existingMember = await prisma.member.findUnique({
-            where: { id: params.id }
+            where: { id }
         });
 
         if (!existingMember) {
@@ -53,14 +54,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         if (data.active !== undefined) updateData.active = Boolean(data.active);
 
         const updated = await prisma.member.update({
-            where: { id: params.id },
+            where: { id },
             data: updateData,
             select: { id: true, name: true, funcao: true, active: true, createdAt: true, updatedAt: true }
         });
         return NextResponse.json(updated);
     } catch (err) {
         console.error('[PATCH /api/members/:id] Error:', err);
-        logApiError('/api/members/:id', 'PATCH', err, { params });
+        logApiError('/api/members/:id', 'PATCH', err, { id });
         return NextResponse.json(
             { error: err instanceof Error ? err.message : 'Erro ao atualizar membro' },
             { status: 400 }

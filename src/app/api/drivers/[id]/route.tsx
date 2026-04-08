@@ -19,17 +19,18 @@ export async function GET(_request: NextRequest,
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
-  const data = await request.json();
+  const data = await _request.json();
   if (!data || Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
   }
 
   try {
-    const updated = await prisma.driver.update({ where: { id: params.id }, data });
+    const updated = await prisma.driver.update({ where: { id }, data });
     return NextResponse.json(updated);
   } catch (err) {
     console.error('[PATCH /api/drivers/[id]] Error:', err);

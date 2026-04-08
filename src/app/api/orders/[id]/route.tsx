@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
 import { authorizeAdmin } from '@/app/api/_lib/route-utils';
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   try {
     const order = await prisma.order.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: { items: true, customer: true },
     });
 
@@ -20,11 +21,12 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
-  const data = await request.json();
+  const data = await _request.json();
   if (!data || Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
   }
@@ -73,7 +75,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     }
 
     const updated = await prisma.order.update({
-      where: { id: params.id },
+      where: { id },
       data: payload,
       include: { items: true, customer: true },
     });
@@ -84,12 +86,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ error: 'Unable to update Order', details: (err as Error).message }, { status: 400 });
   }
 }
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   try {
-    await prisma.order.delete({ where: { id: params.id } });
+    await prisma.order.delete({ where: { id } });
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     console.error('[DELETE /api/orders/[id]] Error:', err);

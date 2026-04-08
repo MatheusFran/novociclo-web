@@ -39,11 +39,12 @@ export async function GET(_request: NextRequest,
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
-  const data = await request.json();
+  const data = await _request.json();
   if (!data || Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
   }
@@ -54,7 +55,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (data.orders !== undefined) updateData.orderIds = normalizeJsonArray(data.orders);
     if (data.cities !== undefined) updateData.cities = normalizeJsonArray(data.cities);
 
-    const updated = await prisma.deliverySchedule.update({ where: { id: params.id }, data: updateData });
+    const updated = await prisma.deliverySchedule.update({ where: { id }, data: updateData });
     return NextResponse.json({
       ...updated,
       orders: parseJsonArray(updated.orderIds || updated.orders || '[]'),

@@ -53,18 +53,19 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   try {
     await prisma.product.delete({
-      where: { id: params.id }
+      where: { id }
     });
 
     return new NextResponse(null, { status: 204 });
   } catch (err) {
-    logApiError('/api/products/:id', 'DELETE', err, { params });
+    logApiError('/api/products/:id', 'DELETE', err, { id });
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Unknown error' },
       { status: 400 }
