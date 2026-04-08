@@ -13,15 +13,14 @@ function authorizeAdmin(session: any) {
 }
 
 export async function GET(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+  _request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const session = await getServerSession(authOptions);
   const error = authorizeAdmin(session);
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   const user = await prisma.user.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: { id: true, email: true, name: true, role: true, active: true, createdAt: true, updatedAt: true },
   });
 
@@ -32,15 +31,13 @@ export async function GET(
   return NextResponse.json(user);
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PATCH(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const session = await getServerSession(authOptions);
   const error = authorizeAdmin(session);
   if (error) return NextResponse.json(error.body, { status: error.status });
 
-  const { name, email, role, active, password } = await request.json();
+  const { name, email, role, active, password } = await _request.json();
   const data: any = {};
 
   if (name) data.name = name;
@@ -60,7 +57,7 @@ export async function PATCH(
 
   try {
     const updatedUser = await prisma.user.update({
-      where: { id: params.id },
+      where: { id },
       data,
       select: { id: true, email: true, name: true, role: true, active: true, createdAt: true, updatedAt: true },
     });
@@ -71,14 +68,12 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const session = await getServerSession(authOptions);
   const error = authorizeAdmin(session);
   if (error) return NextResponse.json(error.body, { status: error.status });
 
-  await prisma.user.delete({ where: { id: params.id } });
+  await prisma.user.delete({ where: { id } });
   return new NextResponse(null, { status: 204 });
 }
