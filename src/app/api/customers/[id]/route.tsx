@@ -2,12 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
 import { authorizeAdmin } from '@/app/api/_lib/route-utils';
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  _request: NextRequest,
+  context: { params: { id: string } }
+) {
+  const { id } = context.params;
+
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   try {
-    const item = await prisma.customer.findUnique({ where: { id: params.id } });
+    const item = await prisma.customer.findUnique({ where: { id } });
     if (!item) return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     return NextResponse.json(item);
   } catch (err) {
