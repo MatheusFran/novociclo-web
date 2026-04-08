@@ -21,11 +21,11 @@ export async function GET(
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
-  const data = await request.json();
+  const data = await _request.json();
   if (!data || Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
   }
@@ -48,12 +48,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   try {
-    await prisma.customer.delete({ where: { id: params.id } });
+    await prisma.customer.delete({ where: { id } });
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     console.error('[DELETE /api/customers/[id]] Error:', err);
