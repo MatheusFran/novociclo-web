@@ -2,24 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
 import { authorizeAdmin, logApiError } from '@/app/api/_lib/route-utils';
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const error = await authorizeAdmin('/api/products/:id', 'GET');
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   try {
     const item = await prisma.product.findFirst({
-      where: { id: params.id }
+      where: { id }
     });
     if (!item) return NextResponse.json({ error: 'Product not found' }, { status: 404 });
     return NextResponse.json(item);
   } catch (err) {
     console.error('[GET /api/products/[id]] Error:', err);
-    logApiError('/api/products/:id', 'GET', err, { params });
+    logApiError('/api/products/:id', 'GET', err, { id });
     return NextResponse.json({ error: 'Unable to fetch Product' }, { status: 500 });
   }
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
   const error = await authorizeAdmin('/api/products/:id', 'PATCH');
   if (error) return NextResponse.json(error.body, { status: error.status });
 
@@ -38,14 +40,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (data.weight !== undefined) updateData.weight = isNaN(Number(data.weight)) ? undefined : Number(data.weight);
 
     const updated = await prisma.product.update({
-      where: { id: params.id },
+      where: { id },
       data: updateData
     });
 
     return NextResponse.json(updated);
   } catch (err) {
     console.error('[PATCH /api/products/[id]] Error:', err);
-    logApiError('/api/products/:id', 'PATCH', err, { params });
+    logApiError('/api/products/:id', 'PATCH', err, { id });
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Erro ao atualizar produto' },
       { status: 400 }
