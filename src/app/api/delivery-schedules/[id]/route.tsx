@@ -17,12 +17,15 @@ function normalizeJsonArray(value: unknown) {
   return JSON.stringify([]);
 }
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   try {
-    const item = await prisma.deliverySchedule.findUnique({ where: { id: params.id } });
+    const item = await prisma.deliverySchedule.findUnique({ where: { id } });
     if (!item) return NextResponse.json({ error: 'DeliverySchedule not found' }, { status: 404 });
 
     return NextResponse.json({
@@ -63,12 +66,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(_request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
   const error = await authorizeAdmin();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   try {
-    await prisma.deliverySchedule.delete({ where: { id: params.id } });
+    await prisma.deliverySchedule.delete({ where: { id } });
     return new NextResponse(null, { status: 204 });
   } catch (err) {
     console.error('[DELETE /api/delivery-schedules/[id]] Error:', err);
