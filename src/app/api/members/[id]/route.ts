@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
 import { authorizeAdmin, logApiError } from '@/app/api/_lib/route-utils';
 
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const { id } = await context.params;
     const error = await authorizeAdmin();
     if (error) return NextResponse.json(error.body, { status: error.status });
 
     try {
         const item = await prisma.member.findUnique({
-            where: { id: params.id },
+            where: { id },
             select: {
                 id: true,
                 name: true,
@@ -22,7 +23,7 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
         return NextResponse.json(item);
     } catch (err) {
         console.error('[GET /api/members/:id] Error:', err);
-        logApiError('/api/members/:id', 'GET', err, { params });
+        logApiError('/api/members/:id', 'GET', err, { id });
         return NextResponse.json({ error: 'Erro ao buscar membro' }, { status: 500 });
     }
 }
