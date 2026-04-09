@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
         where: { id: { in: productIds } },
         select: { id: true },
       });
-      const validProductIds = existingProducts.map(p => p.id);
+      const validProductIds = existingProducts.map((p: { id: any; }) => p.id);
 
       const invalidItems = data.items.filter((i: any) => !validProductIds.includes(i.productId));
       if (invalidItems.length > 0) {

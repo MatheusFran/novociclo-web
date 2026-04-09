@@ -29,8 +29,8 @@ const emptyCustomer = { name: '', cpfcnpj: '', IE: '', phone: '', email: '', add
 const emptyVehicle: Partial<Vehicle> = { plate: '', model: '', type: 'VAN', capacityKg: 1000, status: 'DISPONIVEL' } as const;
 
 const emptyProduct: Partial<Product> = {
-  id: '', name: '', category: '', uom: 'un', price: 0, avgCost: 0,
-  weight: 0, stock: 0, isRawMaterial: false, bom: [], stockDetails: []
+  id: '', name: '', category: '', uom: 'un', price: 0,
+  weight: 0, isRawMaterial: false, bom: [],
 };
 
 export default function ConfiguracoesPage() {
@@ -678,11 +678,11 @@ export default function ConfiguracoesPage() {
 
             <TabsContent value="manual">
               <div className="py-4 space-y-3">
-              <div className="space-y-1">
-                <label className="text-[9px] font-black uppercase text-muted-foreground">Nome completo *</label>
-                <Input placeholder="Nome completo / Razão Social *" value={customerData.name}
-                  onChange={e => setCustomerData({ ...customerData, name: e.target.value })} className="h-9 text-xs" disabled={loading} />
-              </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase text-muted-foreground">Nome completo *</label>
+                  <Input placeholder="Nome completo / Razão Social *" value={customerData.name}
+                    onChange={e => setCustomerData({ ...customerData, name: e.target.value })} className="h-9 text-xs" disabled={loading} />
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <Input placeholder="CPF / CNPJ" value={customerData.cpfcnpj || ''}
                     onChange={e => setCustomerData({ ...customerData, cpfcnpj: e.target.value })} className="h-9 text-xs" disabled={loading} />

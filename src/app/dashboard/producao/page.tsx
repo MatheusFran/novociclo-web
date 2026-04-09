@@ -34,21 +34,16 @@ import * as XLSX from 'xlsx';
 
 
 export default function ProducaoEstoquePage() {
-  const { role } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [isNewProductOpen, setIsNewProductOpen] = useState(false);
   const [groupByCity, setGroupByCity] = useState(false);
   const [selectedOrderDetails, setSelectedOrderDetails] = useState<any>(null);
-  const { orders, products, updateProductionStage, updateOrderStatus, isReady, updateStock, getReservedStock, addProduct } = useSystemData();
+  const { orders, products, updateProductionStage, updateOrderStatus, isReady, } = useSystemData();
   const [historicoSearch, setHistoricoSearch] = useState('');
   const [historicoStatus, setHistoricoStatus] = useState('ALL');
   const [historicoDe, setHistoricoDe] = useState('');
   const [historicoAte, setHistoricoAte] = useState('');
   const [historicoCidade, setHistoricoCidade] = useState('ALL');
-  const [newProd, setNewProd] = useState<Partial<Product>>({
-    id: '', name: '', category: '', uom: 'un', avgCost: 0, price: 0,
-    minStock: 0, isRawMaterial: false, bom: [], stockDetails: []
-  });
 
   const productionOrders = orders.filter(o => o.status === 'PRODUCAO');
   const historicOrders = orders.filter(o => o.status !== 'PRODUCAO' && o.status !== 'PENDENTE');
@@ -86,24 +81,7 @@ export default function ProducaoEstoquePage() {
 
   if (!isReady) return null;
 
-  const handleSaveProduct = () => {
-    if (!newProd.id || !newProd.name) {
-      toast({ variant: "destructive", title: "Erro", description: "SKU e Nome são obrigatórios." });
-      return;
-    }
-    if (products.find(p => p.id === newProd.id)) {
-      toast({ variant: "destructive", title: "Erro", description: "Este SKU já existe." });
-      return;
-    }
-    const finalProduct: Product = {
-      ...newProd,
-      stock: newProd.stockDetails?.reduce((acc, item) => acc + item.quantity, 0) || 0,
-      stockDetails: newProd.stockDetails || [],
-    } as Product;
-    addProduct(finalProduct);
-    setIsNewProductOpen(false);
-    toast({ title: "Sucesso", description: "Produto cadastrado com sucesso." });
-  };
+
 
   const getStageColor = (stage: ProductionStage) => {
     switch (stage) {

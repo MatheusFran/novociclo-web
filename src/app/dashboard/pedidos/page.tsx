@@ -212,7 +212,7 @@ function OrderDetailsModal({
               {/* Coluna Esquerda */}
               <div className="p-8 space-y-7">
                 <InfoSection title="Cliente" icon={<User className="w-3 h-3" />}>
-                  <InfoRow label="Documento" value={order.customerDocument} />
+                  <InfoRow label="Documento" value={order.customerCpfCnpj} />
                   <InfoRow label="Telefone" value={order.customerPhone} />
                   <InfoRow label="E-mail" value={order.customerEmail} />
                   <InfoRow label="Endereço" value={order.customerAddress} />
@@ -315,7 +315,7 @@ function PrintOrderView({ order, products }: { order: Order; products: Product[]
 
         <div className="space-y-3 my-8">
           {[
-            { label: 'Destinatário', value: order.customerName, label2: 'CPF/CNPJ', value2: order.customerDocument || '---' },
+            // { label: 'Destinatário', value: order.customerName, label2: 'CPF/CNPJ', value2: order. || '---' },
             { label: 'Endereço', value: order.customerAddress || '---', label2: 'Cidade - UF', value2: order.city || '---' },
             { label: 'Vendedor', value: order.seller || '---', label2: 'Pagamento', value2: order.paymentCondition?.replace(/_/g, ' ') || '---' },
           ].map((row, i) => (
@@ -523,7 +523,7 @@ function QuoteDocument({
   totalValue,
   totalWeight,
 }: {
-  quoteRef: React.RefObject<HTMLDivElement>;
+  quoteRef: React.RefObject<HTMLDivElement | null>;
   items: OrderItem[];
   customerName: string;
   customerCity: string;
@@ -815,7 +815,7 @@ function QuoteGeneratorModal({
   const totalWeight = calcCartWeight(items, products);
   const totalCost = items.reduce((acc, item) => {
     const prod = products.find(p => p.id === item.productId);
-    return acc + (prod?.avgCost || 0) * item.quantity;
+    return acc + (0) * item.quantity;
   }, 0);
 
   const handleExportPNG = async () => {
@@ -952,7 +952,7 @@ function OrderFormModal({
     editingOrder
       ? {
         name: editingOrder.customerName || '', email: editingOrder.customerEmail || '', phone: editingOrder.customerPhone || '',
-        address: editingOrder.customerAddress || '', document: editingOrder.customerDocument || '', city: editingOrder.city || '',
+        address: editingOrder.customerAddress || '', document: editingOrder.customerCpfCnpj || '', city: editingOrder.city || '',
         responsible: '', neighborhood: '', zip: '', mobile: '', landline: ''
       }
       : { ...EMPTY_CUSTOMER, ...initialCustomer }
@@ -1035,7 +1035,7 @@ function OrderFormModal({
       originalId: editingOrder?.id,
       customerName: customer.name, customerEmail: customer.email,
       customerPhone: customer.phone, customerAddress: customer.address,
-      customerCpfCnpj: customer.cpfcnpj, city: customer.city,
+      customerCpfCnpj: customer.document, city: customer.city,
       items: cart,
       totalValue: calcCartTotal(cart),
       totalWeight: calcCartWeight(cart, products),

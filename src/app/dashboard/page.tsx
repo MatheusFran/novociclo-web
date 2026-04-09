@@ -8,10 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
-  ResponsiveContainer, Cell, LineChart, Line, PieChart, Pie
+  ResponsiveContainer, Cell
 } from 'recharts';
 import {
-  TrendingUp, ShoppingCart, AlertCircle, Clock, FileCheck, ArrowRight,
+  TrendingUp, ShoppingCart, Clock, FileCheck, ArrowRight,
   Wallet, PackageCheck, Factory, Truck, Package, CheckCircle2, CreditCard,
   MapPin, Weight, Users, ChevronRight, AlertTriangle, LogOut
 } from 'lucide-react';
@@ -29,8 +29,7 @@ const STATUS_FLOW = [
 ];
 
 function DashboardContent() {
-  const { orders, products, vehicles, drivers, isReady, hasError, error } = useSystemData();
-  // const { user, signOut } = useAuth();
+  const { orders, vehicles, drivers, isReady, hasError, error } = useSystemData();
 
   if (!isReady) {
     return (
@@ -54,7 +53,6 @@ function DashboardContent() {
   const totalVendas = orders.filter(o => o.status === 'FATURADO').reduce((acc, o) => acc + o.totalValue, 0);
   const totalPendente = orders.filter(o => o.status === 'PENDENTE').reduce((acc, o) => acc + o.totalValue, 0);
   const totalEmRota = orders.filter(o => o.status === 'ENTREGA').reduce((acc, o) => acc + o.totalValue, 0);
-  const valorEstoque = products.reduce((acc, p) => acc + (p.stock * p.avgCost), 0);
   const totalSacosExpedicao = orders.filter(o => o.status === 'PRONTO_LOGISTICA').reduce((acc, o) => acc + o.items.reduce((s, i) => s + i.quantity, 0), 0);
   const totalPesoExpedicao = orders.filter(o => o.status === 'PRONTO_LOGISTICA').reduce((acc, o) => acc + (o.totalWeight || 0), 0);
 
@@ -64,9 +62,6 @@ function DashboardContent() {
     count: orders.filter(o => o.status === s.key).length,
     value: orders.filter(o => o.status === s.key).reduce((acc, o) => acc + o.totalValue, 0),
   }));
-
-  // Estoque crítico
-  const criticalStock = products.filter(p => p.stock <= p.minStock && !p.isRawMaterial).slice(0, 5);
 
   // Top cidades (por valor de pedidos ativos)
   const activeOrders = orders.filter(o => !['FATURADO', 'REJEITADO'].includes(o.status));
@@ -79,13 +74,6 @@ function DashboardContent() {
     cidadeMap[c].peso += o.totalWeight || 0;
   });
   const topCidades = Object.entries(cidadeMap).sort((a, b) => b[1].value - a[1].value).slice(0, 5);
-
-  // Gráfico estoque
-  const stockChart = products.filter(p => !p.isRawMaterial).map(p => ({
-    name: p.name.split(' ')[0],
-    stock: p.stock,
-    min: p.minStock,
-  })).slice(0, 8);
 
   // Pedidos recentes
   const recentOrders = [...orders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 6);
@@ -123,12 +111,11 @@ function DashboardContent() {
       </div>
 
       {/* KPIs principais */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {[
           { label: 'Vendas Faturadas', value: `R$ ${totalVendas.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, sub: `${orders.filter(o => o.status === 'FATURADO').length} pedidos`, color: 'border-green-400', icon: TrendingUp, iconColor: 'text-green-600' },
           { label: 'Pipeline Comercial', value: `R$ ${totalPendente.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, sub: `${orders.filter(o => o.status === 'PENDENTE').length} aguardando`, color: 'border-yellow-400', icon: ShoppingCart, iconColor: 'text-yellow-600' },
           { label: 'Em Trânsito', value: `R$ ${totalEmRota.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, sub: `${orders.filter(o => o.status === 'ENTREGA').length} entregas ativas`, color: 'border-purple-400', icon: Truck, iconColor: 'text-purple-600' },
-          { label: 'Valor do Estoque', value: `R$ ${valorEstoque.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, sub: `${products.filter(p => p.stock <= p.minStock).length} em ruptura`, color: 'border-blue-400', icon: Wallet, iconColor: 'text-blue-600' },
         ].map((kpi, i) => (
           <Card key={i} className={`border-none shadow-sm bg-white border-l-4 ${kpi.color} overflow-hidden`}>
             <CardContent className="p-4">
@@ -174,43 +161,8 @@ function DashboardContent() {
         </CardContent>
       </Card>
 
-      {/* Linha 3: Gráfico + Cidades + Estoque crítico */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-        {/* Gráfico estoque */}
-        <Card className="border-none shadow-sm bg-white lg:col-span-1">
-          <CardContent className="p-4">
-            <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest mb-4">Estoque por Produto</p>
-            <div className="h-[200px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stockChart} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                  <XAxis dataKey="name" fontSize={8} axisLine={false} tickLine={false} />
-                  <YAxis fontSize={8} axisLine={false} tickLine={false} />
-                  <RechartsTooltip contentStyle={{ fontSize: 10 }} />
-                  <Bar dataKey="stock" radius={[4, 4, 0, 0]}>
-                    {stockChart.map((entry, i) => (
-                      <Cell key={i} fill={entry.stock <= entry.min ? '#ef4444' : '#156135'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            {criticalStock.length > 0 && (
-              <div className="mt-3 pt-3 border-t space-y-1.5">
-                <p className="text-[8px] font-black uppercase text-red-600 flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3" /> Ruptura de Estoque
-                </p>
-                {criticalStock.map(p => (
-                  <div key={p.id} className="flex justify-between text-[9px]">
-                    <span className="font-bold truncate max-w-[120px]">{p.name}</span>
-                    <span className="font-black text-red-600">{p.stock}/{p.minStock}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Linha 3: Cidades + Expedição */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {/* Top cidades */}
         <Card className="border-none shadow-sm bg-white">
@@ -393,13 +345,12 @@ function DashboardContent() {
 export default function DashboardOverview() {
   const { user, signOut } = useAuth();
 
-  // Definir módulos disponíveis por role
   const getAvailableModules = (role: string) => {
     const modules = {
-      ADMIN: ['pedidos', 'producao', 'estoque', 'faturamento', 'logistica', 'vendas', 'usuarios'],
-      COMERCIAL: ['pedidos', 'estoque'],
-      PRODUCAO: ['producao', 'estoque'],
-      LOGISTICA: ['logistica', 'estoque'],
+      ADMIN: ['pedidos', 'producao', 'faturamento', 'logistica', 'vendas', 'usuarios'],
+      COMERCIAL: ['pedidos'],
+      PRODUCAO: ['producao'],
+      LOGISTICA: ['logistica'],
     };
     return modules[role as keyof typeof modules] || [];
   };
@@ -453,11 +404,6 @@ export default function DashboardOverview() {
             {availableModules.includes('producao') && (
               <Link href="/dashboard/producao" className="text-sm font-medium text-muted-foreground hover:text-foreground pb-2">
                 Produção
-              </Link>
-            )}
-            {availableModules.includes('estoque') && (
-              <Link href="/dashboard/estoque" className="text-sm font-medium text-muted-foreground hover:text-foreground pb-2">
-                Estoque
               </Link>
             )}
             {availableModules.includes('faturamento') && (
