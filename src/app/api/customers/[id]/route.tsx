@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
-import { authorizeAdmin } from '@/app/api/_lib/route-utils';
+import { authorizeAdmin, authorizeUser } from '@/app/api/_lib/route-utils';
 
 export async function GET(
   _request: NextRequest,
@@ -8,7 +8,7 @@ export async function GET(
 ) {
   const { id } = await context.params;
 
-  const error = await authorizeAdmin();
+  const error = await authorizeUser();
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   try {
