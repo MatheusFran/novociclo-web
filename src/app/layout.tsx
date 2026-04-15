@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/hooks/use-auth";
+// @ts-ignore
+import './globals.css'
+
 
 export const metadata: Metadata = {
   title: 'Novo Ciclo Web',

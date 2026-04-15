@@ -31,7 +31,7 @@ import {
   Plus, Search, Loader2, Trash2, Printer, Eye, ClipboardList, Truck, Package,
   Edit3, Filter, FileDown, ChevronDown, User, MapPin, Calendar, CreditCard,
   CheckCircle2, Clock, AlertCircle, Check, FileText, Download, Image as ImageIcon,
-  Save, ArrowRight, BookOpen, StickyNote,
+  Save, ArrowRight, BookOpen, StickyNote, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { Order, OrderItem, OrderStatus, PaymentCondition, Product, PriceTable } from '@/lib/types';
 import { format } from 'date-fns';
@@ -94,6 +94,8 @@ const PAYMENT_OPTIONS: { value: PaymentCondition; label: string }[] = [
   { value: 'BOLETO_30_60_90', label: 'Boleto 30/60/90' },
 ];
 
+const PAGE_SIZE_OPTIONS = [10, 25, 50];
+
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -127,10 +129,74 @@ function calcCartWeight(cart: OrderItem[], products: Product[]): number {
   }, 0);
 }
 
+// ─────────────────────────────────────────────
+// COMPONENTE DE PAGINAÇÃO
+// ─────────────────────────────────────────────
+function Pagination({
+  total,
+  page,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  total: number;
+  page: number;
+  pageSize: number;
+  onPageChange: (p: number) => void;
+  onPageSizeChange: (s: number) => void;
+}) {
+  const totalPages = Math.ceil(total / pageSize);
+  if (total === 0) return null;
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2 py-3 border-t">
+      <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase">
+        <span>Linhas por página:</span>
+        <Select value={String(pageSize)} onValueChange={v => { onPageSizeChange(Number(v)); onPageChange(1); }}>
+          <SelectTrigger className="h-7 w-16 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {PAGE_SIZE_OPTIONS.map(s => <SelectItem key={s} value={String(s)}>{s}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <span className="ml-2">{((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, total)} de {total}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <Button variant="outline" size="icon" className="h-7 w-7" disabled={page === 1} onClick={() => onPageChange(1)}>
+          <ChevronLeft className="w-3 h-3" /><ChevronLeft className="w-3 h-3 -ml-2" />
+        </Button>
+        <Button variant="outline" size="icon" className="h-7 w-7" disabled={page === 1} onClick={() => onPageChange(page - 1)}>
+          <ChevronLeft className="w-3 h-3" />
+        </Button>
+        {Array.from({ length: totalPages }, (_, i) => i + 1)
+          .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 1)
+          .reduce<(number | '...')[]>((acc, p, i, arr) => {
+            if (i > 0 && p - (arr[i - 1] as number) > 1) acc.push('...');
+            acc.push(p);
+            return acc;
+          }, [])
+          .map((p, i) =>
+            p === '...'
+              ? <span key={`e-${i}`} className="text-[10px] px-1 text-muted-foreground">…</span>
+              : <Button key={p} variant={page === p ? 'default' : 'outline'} size="icon"
+                className="h-7 w-7 text-[10px] font-black" onClick={() => onPageChange(p as number)}>
+                {p}
+              </Button>
+          )
+        }
+        <Button variant="outline" size="icon" className="h-7 w-7" disabled={page === totalPages} onClick={() => onPageChange(page + 1)}>
+          <ChevronRight className="w-3 h-3" />
+        </Button>
+        <Button variant="outline" size="icon" className="h-7 w-7" disabled={page === totalPages} onClick={() => onPageChange(totalPages)}>
+          <ChevronRight className="w-3 h-3" /><ChevronRight className="w-3 h-3 -ml-2" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 
 // ─────────────────────────────────────────────
 // SUB-COMPONENTES — CABEÇALHO DE DOCUMENTO
-// (compartilhado entre cotação e impressão de pedido)
 // ─────────────────────────────────────────────
 function DocHeader({ title, subtitle, date }: { title: string; subtitle: string; date: string }) {
   return (
@@ -174,21 +240,21 @@ function OrderDetailsModal({
 
   return (
     <Dialog open={!!order} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl p-0 overflow-hidden bg-white">
+      <DialogContent className="max-w-4xl w-[95vw] p-0 overflow-hidden bg-white">
         <DialogTitle className="sr-only">{order.id} - {order.customerName}</DialogTitle>
 
         <div className="flex flex-col max-h-[90vh]">
           {/* Header */}
-          <div className="bg-primary px-8 py-5 flex items-center justify-between shrink-0">
+          <div className="bg-primary px-4 sm:px-8 py-4 sm:py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-0.5">{order.id}</p>
-              <h2 className="text-xl font-black uppercase text-white tracking-tight">{order.customerName}</h2>
+              <h2 className="text-lg sm:text-xl font-black uppercase text-white tracking-tight">{order.customerName}</h2>
               <div className="flex items-center gap-1.5 mt-1">
                 <MapPin className="w-3.5 h-3.5 text-white/60" />
                 <span className="text-sm font-black text-white/90 uppercase">{order.city || '---'}</span>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className={`${STATUS_MAP[order.status]?.color} text-[9px] font-black uppercase px-3 h-6`}>
                 {STATUS_MAP[order.status]?.label}
               </Badge>
@@ -205,12 +271,11 @@ function OrderDetailsModal({
             </div>
           </div>
 
-          {/* Body — duas colunas */}
+          {/* Body */}
           <div className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-2 divide-x">
-
+            <div className="grid grid-cols-1 md:grid-cols-2 md:divide-x">
               {/* Coluna Esquerda */}
-              <div className="p-8 space-y-7">
+              <div className="p-4 sm:p-8 space-y-7">
                 <InfoSection title="Cliente" icon={<User className="w-3 h-3" />}>
                   <InfoRow label="Documento" value={order.customerCpfCnpj} />
                   <InfoRow label="Telefone" value={order.customerPhone} />
@@ -250,7 +315,7 @@ function OrderDetailsModal({
               </div>
 
               {/* Coluna Direita — Itens */}
-              <div className="p-8 flex flex-col gap-6">
+              <div className="p-4 sm:p-8 flex flex-col gap-6 border-t md:border-t-0">
                 <InfoSection title="Itens do Pedido" icon={<Package className="w-3 h-3" />}>
                   <div className="space-y-2">
                     {order.items.map((item, idx) => {
@@ -279,7 +344,7 @@ function OrderDetailsModal({
                 <div className="mt-auto pt-4 border-t space-y-2">
                   <div className="flex justify-between text-[10px] font-bold text-muted-foreground">
                     <span>Quantidade total</span>
-                    <span>{order.items.reduce((acc, i) => acc + i.quantity, 0)} un</span>
+                    <span>{order.items.reduce((acc, i) => acc + i.quantity, 0)} sc</span>
                   </div>
                   <div className="flex justify-between text-[10px] font-bold text-muted-foreground">
                     <span>Peso total</span>
@@ -315,7 +380,6 @@ function PrintOrderView({ order, products }: { order: Order; products: Product[]
 
         <div className="space-y-3 my-8">
           {[
-            // { label: 'Destinatário', value: order.customerName, label2: 'CPF/CNPJ', value2: order. || '---' },
             { label: 'Endereço', value: order.customerAddress || '---', label2: 'Cidade - UF', value2: order.city || '---' },
             { label: 'Vendedor', value: order.seller || '---', label2: 'Pagamento', value2: order.paymentCondition?.replace(/_/g, ' ') || '---' },
           ].map((row, i) => (
@@ -413,20 +477,20 @@ function QuoteDetailsModal({
 
   return (
     <Dialog open={!!quote} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden bg-white">
+      <DialogContent className="max-w-2xl w-[95vw] p-0 overflow-hidden bg-white">
         <DialogTitle className="sr-only">{quote.id} - {quote.customerName}</DialogTitle>
 
         <div className="flex flex-col max-h-[90vh]">
-          <div className="bg-primary px-8 py-5 flex items-center justify-between shrink-0">
+          <div className="bg-primary px-4 sm:px-8 py-4 sm:py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
             <div>
               <p className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-0.5">{quote.id}</p>
-              <h2 className="text-xl font-black uppercase text-white tracking-tight">{quote.customerName}</h2>
+              <h2 className="text-lg sm:text-xl font-black uppercase text-white tracking-tight">{quote.customerName}</h2>
               <div className="flex items-center gap-1.5 mt-1">
                 <MapPin className="w-3.5 h-3.5 text-white/60" />
                 <span className="text-sm font-black text-white/90 uppercase">{quote.customerCity || '---'}</span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline" className={`${QUOTE_STATUS_MAP[quote.status]?.color} text-[9px] font-black uppercase px-3 h-6`}>
                 {QUOTE_STATUS_MAP[quote.status]?.label}
               </Badge>
@@ -439,8 +503,8 @@ function QuoteDetailsModal({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-8 space-y-6">
-            <div className="grid grid-cols-3 gap-4 pb-4 border-b">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-4 border-b">
               <InfoRow label="Contato" value={quote.customerPhone} />
               <InfoRow label="Tabela de Preços" value={quote.priceTableId} />
               <InfoRow label="Data" value={format(new Date(quote.createdAt), 'dd/MM/yyyy HH:mm')} />
@@ -676,7 +740,7 @@ function QuoteSidePanel({
   };
 
   return (
-    <div className="w-[320px] bg-white border-r flex flex-col overflow-hidden shrink-0 no-print no-export">
+    <div className="w-full sm:w-[320px] bg-white border-r flex flex-col overflow-hidden shrink-0 no-print no-export">
       <div className="p-4 border-b bg-primary/5">
         <p className="text-[10px] font-black uppercase text-primary">Configuração da Cotação</p>
       </div>
@@ -854,11 +918,11 @@ function QuoteGeneratorModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[1300px] h-[95vh] flex flex-col p-0 overflow-hidden bg-zinc-100">
+      <DialogContent className="max-w-[1300px] w-[98vw] h-[95vh] flex flex-col p-0 overflow-hidden bg-zinc-100">
         <DialogTitle className="sr-only">Gerador de Cotação</DialogTitle>
 
         {/* Header */}
-        <div className="bg-white border-b px-6 py-3 flex items-center justify-between shrink-0">
+        <div className="bg-white border-b px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3">
             <FileText className="w-5 h-5 text-primary" />
             <div>
@@ -866,7 +930,7 @@ function QuoteGeneratorModal({
               <p className="text-[9px] font-bold text-muted-foreground uppercase">Preencha o painel lateral e exporte</p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" className="gap-2 font-bold uppercase text-[10px]" onClick={handleExportPNG}>
               <ImageIcon className="w-3.5 h-3.5" /> PNG
             </Button>
@@ -884,7 +948,7 @@ function QuoteGeneratorModal({
           </div>
         </div>
 
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-col sm:flex-row flex-1 overflow-hidden">
           <QuoteSidePanel
             items={items} setItems={setItems}
             customerName={customerName} setCustomerName={setCustomerName}
@@ -896,7 +960,7 @@ function QuoteGeneratorModal({
           />
 
           {/* Área do documento */}
-          <div className="flex-1 overflow-y-auto p-10 bg-zinc-100">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-10 bg-zinc-100">
             <QuoteDocument
               quoteRef={quoteRef}
               items={items}
@@ -945,30 +1009,26 @@ function OrderFormModal({
   initialCustomer?: Partial<CustomerForm>;
   initialPriceList?: string;
 }) {
-  const [customerId, setCustomerId] = useState(editingOrder ? editingOrder.customerName : '');
-  const [customerSearch, setCustomerSearch] = useState(editingOrder ? editingOrder.customerName : '');
+  // ── FIX: estado derivado do prop — reseta corretamente ao abrir/fechar ──
+  const [customerId, setCustomerId] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
-  const [customer, setCustomer] = useState<CustomerForm>(() =>
-    editingOrder
-      ? {
-        name: editingOrder.customerName || '', email: editingOrder.customerEmail || '', phone: editingOrder.customerPhone || '',
-        address: editingOrder.customerAddress || '', document: editingOrder.customerCpfCnpj || '', city: editingOrder.city || '',
-        responsible: '', neighborhood: '', zip: '', mobile: '', landline: ''
-      }
-      : { ...EMPTY_CUSTOMER, ...initialCustomer }
-  );
-  const [seller, setSeller] = useState(editingOrder?.seller || '');
+  const [customer, setCustomer] = useState<CustomerForm>({ ...EMPTY_CUSTOMER });
+  const [seller, setSeller] = useState('');
   const [closingPerson, setClosingPerson] = useState('');
-  const [paymentCondition, setPaymentCondition] = useState<PaymentCondition>(editingOrder?.paymentCondition || 'BOLETO_15_DIAS');
-  const [deliveryDate, setDeliveryDate] = useState(editingOrder?.deliveryDate || '');
-  const [observations, setObservations] = useState((editingOrder as any)?.observations || '');
-  const [priceList, setPriceList] = useState(editingOrder?.priceTableId || initialPriceList || priceTables[0]?.id || 'PADRAO');
-  const [cart, setCart] = useState<OrderItem[]>(
-    editingOrder ? editingOrder.items : (initialCart || [])
-  );
+  const [paymentCondition, setPaymentCondition] = useState<PaymentCondition>('BOLETO_15_DIAS');
+  const [deliveryDate, setDeliveryDate] = useState('');
+  const [observations, setObservations] = useState('');
+  const [priceList, setPriceList] = useState(priceTables[0]?.id || 'PADRAO');
+  const [cart, setCart] = useState<OrderItem[]>([]);
 
+  // ── FIX: único ponto de inicialização — roda apenas quando `open` muda para true ──
   useEffect(() => {
+    if (!open) return;
+
     if (editingOrder) {
+      setCustomerId(editingOrder.customerName);
+      setCustomerSearch(editingOrder.customerName);
       setCustomer({
         name: editingOrder.customerName || '',
         email: editingOrder.customerEmail || '',
@@ -978,15 +1038,29 @@ function OrderFormModal({
         city: editingOrder.city || '',
         responsible: '', neighborhood: '', zip: '', mobile: '', landline: '',
       });
-      setCustomerSearch(editingOrder.customerName || '');
       setSeller(editingOrder.seller || '');
+      setClosingPerson('');
       setPaymentCondition(editingOrder.paymentCondition || 'BOLETO_15_DIAS');
       setDeliveryDate(editingOrder.deliveryDate || '');
       setObservations((editingOrder as any).observations || '');
       setPriceList(editingOrder.priceTableId || priceTables[0]?.id || 'PADRAO');
       setCart(editingOrder.items || []);
+    } else {
+      // Novo pedido (possivelmente com dados pré-preenchidos de cotação)
+      setCustomerId('');
+      setCustomerSearch('');
+      setCustomer({ ...EMPTY_CUSTOMER, ...(initialCustomer || {}) });
+      setSeller('');
+      setClosingPerson('');
+      setPaymentCondition('BOLETO_15_DIAS');
+      setDeliveryDate('');
+      setObservations('');
+      setPriceList(initialPriceList || priceTables[0]?.id || 'PADRAO');
+      setCart(initialCart || []);
     }
-  }, [editingOrder]);
+    setCustomerSearchOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const filteredCustomers = useMemo(() => {
     if (!customerSearch.trim()) return customers;
@@ -1051,7 +1125,7 @@ function OrderFormModal({
 
   return (
     <Dialog open={open} onOpenChange={(val) => { if (!val) onOpenChange(false); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+      <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto p-0 gap-0">
         <DialogTitle className="sr-only">
           {editingOrder ? `Editando · ${editingOrder.id}` : 'Novo Pedido'}
         </DialogTitle>
@@ -1066,7 +1140,7 @@ function OrderFormModal({
           </h2>
         </div>
 
-        <div className="px-6 py-6 space-y-6">
+        <div className="px-4 sm:px-6 py-6 space-y-6">
           {/* ── Cliente ── */}
           <div className="space-y-3 relative">
             <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
@@ -1083,7 +1157,6 @@ function OrderFormModal({
                   setCustomerSearchOpen(e.target.value.trim().length > 0);
                   if (!e.target.value.trim()) { setCustomerId(''); setCustomer({ ...EMPTY_CUSTOMER }); }
                 }}
-              // onFocus={() => setCustomerSearchOpen(true)}
               />
               {customerSearchOpen && filteredCustomers.length > 0 && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
@@ -1119,7 +1192,7 @@ function OrderFormModal({
                   </Button>
                 </div>
                 <Input value={customer.document} disabled className="h-9 text-xs bg-muted" />
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Input value={customer.city} disabled className="h-9 text-xs bg-muted" />
                   <Input value={customer.phone} disabled className="h-9 text-xs bg-muted" />
                 </div>
@@ -1129,11 +1202,11 @@ function OrderFormModal({
             ) : (
               <>
                 <Input value={customer.name} onChange={e => setCustomer({ ...customer, name: e.target.value })} placeholder="Nome / Razão Social" className="h-9 text-xs" />
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Input value={customer.document} onChange={e => setCustomer({ ...customer, document: e.target.value })} placeholder="CPF / CNPJ" className="h-9 text-xs" />
                   <Input value={customer.city} onChange={e => setCustomer({ ...customer, city: e.target.value })} placeholder="Cidade - UF" className="h-9 text-xs" />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <Input value={customer.phone} onChange={e => setCustomer({ ...customer, phone: e.target.value })} placeholder="Telefone" className="h-9 text-xs" />
                   <Input value={customer.email} onChange={e => setCustomer({ ...customer, email: e.target.value })} placeholder="E-mail" className="h-9 text-xs" />
                 </div>
@@ -1161,7 +1234,7 @@ function OrderFormModal({
                 {members.map(m => <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>)}
               </SelectContent>
             </Select>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Select onValueChange={(val: PaymentCondition) => setPaymentCondition(val)} value={paymentCondition}>
                 <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Pagamento *" /></SelectTrigger>
                 <SelectContent>
@@ -1179,7 +1252,7 @@ function OrderFormModal({
             <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
               <Package className="w-3 h-3" /> Itens do Pedido
             </p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <Select onValueChange={handleChangePriceList} value={priceList}>
                 <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Tabela de Preços" /></SelectTrigger>
                 <SelectContent>
@@ -1202,8 +1275,8 @@ function OrderFormModal({
                 <p className="text-[10px] font-bold uppercase text-muted-foreground/40">Nenhum produto adicionado</p>
               </div>
             ) : (
-              <div className="space-y-2 border rounded-lg overflow-hidden">
-                <div className="bg-muted/50 px-3 py-2 grid grid-cols-12 gap-2 text-[8px] font-black uppercase text-muted-foreground border-b">
+              <div className="space-y-2 border rounded-lg overflow-hidden overflow-x-auto">
+                <div className="bg-muted/50 px-3 py-2 grid grid-cols-12 gap-2 text-[8px] font-black uppercase text-muted-foreground border-b min-w-[480px]">
                   <div className="col-span-4">Produto</div>
                   <div className="col-span-2 text-center">Qtd</div>
                   <div className="col-span-2 text-right">V. Unitário</div>
@@ -1216,7 +1289,7 @@ function OrderFormModal({
                   const tabelaPrice = getProductPrice(prod as Product, priceTables, priceList);
                   const subtotal = item.price * item.quantity - (item.discount || 0);
                   return (
-                    <div key={item.productId} className="px-3 py-2 grid grid-cols-12 gap-2 items-center border-b hover:bg-muted/30 transition">
+                    <div key={item.productId} className="px-3 py-2 grid grid-cols-12 gap-2 items-center border-b hover:bg-muted/30 transition min-w-[480px]">
                       <div className="col-span-4">
                         <p className="text-[10px] font-bold uppercase truncate">{prod?.name}</p>
                       </div>
@@ -1261,7 +1334,7 @@ function OrderFormModal({
         </div>
 
         {/* Footer fixo */}
-        <div className="sticky bottom-0 bg-white border-t px-6 py-4 space-y-3">
+        <div className="sticky bottom-0 bg-white border-t px-4 sm:px-6 py-4 space-y-3">
           <div className="flex justify-between text-[10px] font-bold text-muted-foreground">
             <span>Peso estimado</span>
             <span>{cartWeight.toFixed(2)} KG</span>
@@ -1308,6 +1381,8 @@ function OrdersTab({
   const [sellerFilter, setSellerFilter] = useState('ALL');
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
   const [groupByCity, setGroupByCity] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const filteredOrders = useMemo(() => {
     return orders.filter(o => {
@@ -1323,15 +1398,24 @@ function OrdersTab({
     });
   }, [orders, search, statusFilter, sellerFilter, dateRange]);
 
+  // Reset página ao mudar filtros
+  useEffect(() => { setPage(1); }, [search, statusFilter, sellerFilter, dateRange, groupByCity]);
+
   const groupedOrders = useMemo(() => {
-    if (!groupByCity) return { 'Listagem Geral': filteredOrders };
-    return filteredOrders.reduce((acc, order) => {
+    if (!groupByCity) {
+      const start = (page - 1) * pageSize;
+      return { 'Listagem Geral': filteredOrders.slice(start, start + pageSize) };
+    }
+    // Com agrupamento: pagina dentro do total filtrado
+    const start = (page - 1) * pageSize;
+    const paged = filteredOrders.slice(start, start + pageSize);
+    return paged.reduce((acc, order) => {
       const city = order.city || 'Sem Cidade';
       if (!acc[city]) acc[city] = [];
       acc[city].push(order);
       return acc;
     }, {} as Record<string, Order[]>);
-  }, [filteredOrders, groupByCity]);
+  }, [filteredOrders, groupByCity, page, pageSize]);
 
   const handleExport = () => {
     const ws = XLSX.utils.json_to_sheet(filteredOrders.map(o => ({
@@ -1353,10 +1437,10 @@ function OrdersTab({
   return (
     <div className="space-y-4">
       {/* Cards de totais */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: 'Faturamento Total', value: `R$ ${totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
-          { label: 'Quantidade Total', value: `${totalQuantidade.toLocaleString()} un` },
+          { label: 'Quantidade Total', value: `${totalQuantidade.toLocaleString()} sc` },
           { label: 'Peso Total', value: `${totalKg.toFixed(2)} kg` },
         ].map(({ label, value }) => (
           <Card key={label} className="border shadow-sm">
@@ -1376,7 +1460,7 @@ function OrdersTab({
               <Filter className="w-3.5 h-3.5" /> Filtros Avançados
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-80 p-4">
+          <PopoverContent className="w-72 sm:w-80 p-4">
             <div className="space-y-4">
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase">Status</label>
@@ -1417,14 +1501,14 @@ function OrdersTab({
           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${groupByCity ? 'rotate-180' : ''}`} /> Agrupar Cidade
         </Button>
         <Button variant="outline" size="sm" className="gap-2 font-bold uppercase text-[10px]" onClick={handleExport}>
-          <FileDown className="w-3.5 h-3.5" /> Exportar Planilha
+          <FileDown className="w-3.5 h-3.5" /> Exportar
         </Button>
       </div>
 
       {/* Busca */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input placeholder="PESQUISAR POR CLIENTE, CÓDIGO DO PEDIDO OU CIDADE..."
+        <Input placeholder="Pesquisar por cliente, código ou cidade..."
           className="pl-10 h-11 text-xs font-bold uppercase tracking-widest shadow-inner bg-white border-2 focus-visible:ring-primary"
           value={search} onChange={e => setSearch(e.target.value)} />
       </div>
@@ -1432,99 +1516,110 @@ function OrdersTab({
       {/* Tabela agrupada */}
       <Card className="border-none shadow-sm overflow-hidden">
         <CardContent className="p-0">
-          {Object.entries(groupedOrders).map(([groupName, groupOrders], idx) => (
-            <div key={groupName} className={idx > 0 ? "border-t-4 border-primary/10" : ""}>
-              {groupByCity && (
-                <div className="bg-primary/5 px-4 py-2 border-b flex items-center justify-between">
-                  <h2 className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                    <Truck className="w-3.5 h-3.5" /> {groupName}
-                  </h2>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[9px] bg-white">{groupOrders.length} PEDIDOS</Badge>
-                    <Badge variant="outline" className="text-[9px] bg-white">
-                      {groupOrders.reduce((acc, o) => acc + (o.totalValue || 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </Badge>
-                    <Badge variant="outline" className="text-[9px] bg-white">
-                      {groupOrders.reduce((acc, o) => acc + (o.items || []).reduce((s, i) => s + i.quantity, 0), 0)} UN
-                    </Badge>
-                    <Badge variant="outline" className="text-[9px] bg-white">
-                      {groupOrders.reduce((acc, o) => acc + (o.totalWeight || 0), 0).toFixed(2)} KG
-                    </Badge>
+          <div className="overflow-x-auto">
+            {Object.entries(groupedOrders).map(([groupName, groupOrders], idx) => (
+              <div key={groupName} className={idx > 0 ? "border-t-4 border-primary/10" : ""}>
+                {groupByCity && (
+                  <div className="bg-primary/5 px-4 py-2 border-b flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <h2 className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                      <Truck className="w-3.5 h-3.5" /> {groupName}
+                    </h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="text-[9px] bg-white">{groupOrders.length} PEDIDOS</Badge>
+                      <Badge variant="outline" className="text-[9px] bg-white">
+                        {groupOrders.reduce((acc, o) => acc + (o.totalValue || 0), 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </Badge>
+                      <Badge variant="outline" className="text-[9px] bg-white">
+                        {groupOrders.reduce((acc, o) => acc + (o.items || []).reduce((s, i) => s + i.quantity, 0), 0)} UN
+                      </Badge>
+                      <Badge variant="outline" className="text-[9px] bg-white">
+                        {groupOrders.reduce((acc, o) => acc + (o.totalWeight || 0), 0).toFixed(2)} KG
+                      </Badge>
+                    </div>
                   </div>
-                </div>
-              )}
-              <Table>
-                <TableHeader className="bg-muted/30">
-                  <TableRow className="h-10">
-                    {['Ref. Pedido', 'Cliente / Empresa', 'Vendedor', 'Cidade', 'Qtd. Total', 'Peso (KG)', 'Data', 'Valor Total', 'Status', 'Ações'].map(h => (
-                      <TableHead key={h} className="text-[9px] font-black uppercase">{h}</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {groupOrders.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={10} className="text-center py-20 text-muted-foreground italic font-bold text-xs uppercase opacity-30">
-                        Nenhum pedido encontrado
-                      </TableCell>
+                )}
+                <Table>
+                  <TableHeader className="bg-muted/30">
+                    <TableRow className="h-10">
+                      {['Ref.', 'Cliente', 'Vendedor', 'Cidade', 'Qtd', 'KG', 'Data', 'Valor', 'Status', 'Ações'].map(h => (
+                        <TableHead key={h} className="text-[9px] font-black uppercase whitespace-nowrap">{h}</TableHead>
+                      ))}
                     </TableRow>
-                  )}
-                  {groupOrders.map(order => {
-                    const totalItems = (order.items || []).reduce((acc, i) => acc + i.quantity, 0);
-                    const StatusIcon = STATUS_MAP[order.status]?.icon || AlertCircle;
-                    return (
-                      <TableRow key={order.id} className="hover:bg-muted/20 h-14">
-                        <TableCell className="font-mono text-[11px] font-black text-primary">{order.id}</TableCell>
-                        <TableCell className="text-[11px] font-black uppercase text-slate-700">{order.customerName}</TableCell>
-                        <TableCell className="text-[10px] font-bold text-slate-500 uppercase">{order.seller || '---'}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
-                            <span className="text-[10px] font-black text-slate-700 uppercase">{order.city || '---'}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center text-[10px] font-black">{totalItems}</TableCell>
-                        <TableCell className="text-center text-[10px] font-black">{order.totalWeight?.toFixed(2)}</TableCell>
-                        <TableCell className="text-center text-[10px]">
-                          {order.createdAt ? format(new Date(order.createdAt), 'dd/MM/yy') : '---'}
-                        </TableCell>
-                        <TableCell className="text-right text-[11px] font-black">R$ {(order.totalValue || 0).toLocaleString()}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="outline"
-                            className={`${STATUS_MAP[order.status]?.color} text-[8px] font-black uppercase tracking-tighter px-2 h-5 flex items-center gap-1 justify-center`}>
-                            <StatusIcon className="w-2.5 h-2.5" />
-                            {STATUS_MAP[order.status]?.label || order.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right pr-4">
-                          <div className="flex justify-end gap-1">
-                            {order.status === 'PENDENTE' && (
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50" onClick={() => onApprove(order.id)}>
-                                <CheckCircle2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => onViewDetails(order)}>
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            {!['FATURADO', 'REJEITADO'].includes(order.status) && (
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => onEdit(order)}>
-                                <Edit3 className="w-4 h-4" />
-                              </Button>
-                            )}
-                            {['PENDENTE', 'PRODUCAO'].includes(order.status) && (
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => onDelete(order.id)}>
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
+                  </TableHeader>
+                  <TableBody>
+                    {groupOrders.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={10} className="text-center py-20 text-muted-foreground italic font-bold text-xs uppercase opacity-30">
+                          Nenhum pedido encontrado
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-          ))}
+                    )}
+                    {[...groupOrders]
+                      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                      .map(order => {
+                        const totalItems = (order.items || []).reduce((acc, i) => acc + i.quantity, 0);
+                        const StatusIcon = STATUS_MAP[order.status]?.icon || AlertCircle;
+                        return (
+                          <TableRow key={order.id} className="hover:bg-muted/20 h-14">
+                            <TableCell className="font-mono text-[11px] font-black text-primary whitespace-nowrap">{order.id}</TableCell>
+                            <TableCell className="text-[11px] font-black uppercase text-slate-700 max-w-[120px] truncate">{order.customerName}</TableCell>
+                            <TableCell className="text-[10px] font-bold text-slate-500 uppercase whitespace-nowrap">{order.seller || '---'}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
+                                <span className="text-[10px] font-black text-slate-700 uppercase whitespace-nowrap">{order.city || '---'}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center text-[10px] font-black">{totalItems}</TableCell>
+                            <TableCell className="text-center text-[10px] font-black">{order.totalWeight?.toFixed(1)}</TableCell>
+                            <TableCell className="text-center text-[10px] whitespace-nowrap">
+                              {order.createdAt ? format(new Date(order.createdAt), 'dd/MM/yy') : '---'}
+                            </TableCell>
+                            <TableCell className="text-right text-[11px] font-black whitespace-nowrap">R$ {(order.totalValue || 0).toLocaleString()}</TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline"
+                                className={`${STATUS_MAP[order.status]?.color} text-[8px] font-black uppercase tracking-tighter px-2 h-5 flex items-center gap-1 justify-center whitespace-nowrap`}>
+                                <StatusIcon className="w-2.5 h-2.5" />
+                                {STATUS_MAP[order.status]?.label || order.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right pr-4">
+                              <div className="flex justify-end gap-1">
+                                {order.status === 'PENDENTE' && (
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50" onClick={() => onApprove(order.id)}>
+                                    <CheckCircle2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => onViewDetails(order)}>
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                                {!['FATURADO', 'REJEITADO'].includes(order.status) && (
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => onEdit(order)}>
+                                    <Edit3 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                                {['PENDENTE', 'PRODUCAO'].includes(order.status) && (
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => onDelete(order.id)}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                  </TableBody>
+                </Table>
+              </div>
+            ))}
+          </div>
+          <Pagination
+            total={filteredOrders.length}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
     </div>
@@ -1550,6 +1645,8 @@ function QuotesTab({
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const filtered = useMemo(() =>
     quotes.filter(q => {
@@ -1559,16 +1656,23 @@ function QuotesTab({
     [quotes, search, statusFilter]
   );
 
+  useEffect(() => { setPage(1); }, [search, statusFilter]);
+
+  const paged = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="relative flex-1 w-full sm:max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Pesquisar cotação ou cliente..." className="pl-10 h-9 text-xs font-bold"
+          <Input placeholder="Pesquisar cotação ou cliente..." className="pl-10 h-9 text-xs font-bold w-full"
             value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-9 text-xs w-36"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-9 text-xs w-full sm:w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">Todos</SelectItem>
             <SelectItem value="ABERTA">Abertas</SelectItem>
@@ -1576,74 +1680,83 @@ function QuotesTab({
             <SelectItem value="CANCELADA">Canceladas</SelectItem>
           </SelectContent>
         </Select>
-        <span className="text-[9px] font-bold text-muted-foreground uppercase ml-auto">{filtered.length} cotações</span>
+        <span className="text-[9px] font-bold text-muted-foreground uppercase sm:ml-auto">{filtered.length} cotações</span>
       </div>
 
       <Card className="border-none shadow-sm overflow-hidden">
         <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-muted/30">
-              <TableRow className="h-10">
-                {['ID', 'Cliente', 'Cidade', 'Itens', 'Valor Total', 'Data', 'Status', 'Ações'].map(h => (
-                  <TableHead key={h} className="text-[9px] font-black uppercase">{h}</TableHead>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-muted/30">
+                <TableRow className="h-10">
+                  {['ID', 'Cliente', 'Cidade', 'Itens', 'Valor Total', 'Data', 'Status', 'Ações'].map(h => (
+                    <TableHead key={h} className="text-[9px] font-black uppercase whitespace-nowrap">{h}</TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paged.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center py-20 text-muted-foreground italic font-bold text-xs uppercase opacity-30">
+                      Nenhuma cotação salva
+                    </TableCell>
+                  </TableRow>
+                )}
+                {paged.map(quote => (
+                  <TableRow key={quote.id} className="hover:bg-muted/20 h-14">
+                    <TableCell className="font-mono text-[11px] font-black text-primary whitespace-nowrap">{quote.id}</TableCell>
+                    <TableCell className="text-[11px] font-black uppercase text-slate-700 max-w-[120px] truncate">{quote.customerName}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
+                        <span className="text-[10px] font-black text-slate-700 uppercase whitespace-nowrap">{quote.customerCity || '---'}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center text-[10px] font-black">
+                      {quote.items.reduce((acc, i) => acc + i.quantity, 0)} un
+                    </TableCell>
+                    <TableCell className="text-right text-[11px] font-black whitespace-nowrap">
+                      R$ {quote.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell className="text-center text-[10px] whitespace-nowrap">
+                      {format(new Date(quote.createdAt), 'dd/MM/yy')}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className={`${QUOTE_STATUS_MAP[quote.status]?.color} text-[8px] font-black uppercase px-2 h-5 whitespace-nowrap`}>
+                        {QUOTE_STATUS_MAP[quote.status]?.label}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right pr-4">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => onView(quote)}>
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        {quote.status === 'ABERTA' && (
+                          <>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50"
+                              title="Converter em Pedido" onClick={() => onConvert(quote)}>
+                              <ArrowRight className="w-4 h-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50"
+                              title="Cancelar Cotação" onClick={() => onCancel(quote.id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-20 text-muted-foreground italic font-bold text-xs uppercase opacity-30">
-                    Nenhuma cotação salva
-                  </TableCell>
-                </TableRow>
-              )}
-              {filtered.map(quote => (
-                <TableRow key={quote.id} className="hover:bg-muted/20 h-14">
-                  <TableCell className="font-mono text-[11px] font-black text-primary">{quote.id}</TableCell>
-                  <TableCell className="text-[11px] font-black uppercase text-slate-700">{quote.customerName}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
-                      <span className="text-[10px] font-black text-slate-700 uppercase">{quote.customerCity || '---'}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center text-[10px] font-black">
-                    {quote.items.reduce((acc, i) => acc + i.quantity, 0)} un
-                  </TableCell>
-                  <TableCell className="text-right text-[11px] font-black">
-                    R$ {quote.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </TableCell>
-                  <TableCell className="text-center text-[10px]">
-                    {format(new Date(quote.createdAt), 'dd/MM/yy')}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant="outline" className={`${QUOTE_STATUS_MAP[quote.status]?.color} text-[8px] font-black uppercase px-2 h-5`}>
-                      {QUOTE_STATUS_MAP[quote.status]?.label}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right pr-4">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => onView(quote)}>
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      {quote.status === 'ABERTA' && (
-                        <>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50"
-                            title="Converter em Pedido" onClick={() => onConvert(quote)}>
-                            <ArrowRight className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50"
-                            title="Cancelar Cotação" onClick={() => onCancel(quote.id)}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableBody>
+            </Table>
+          </div>
+          <Pagination
+            total={filtered.length}
+            page={page}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
     </div>
@@ -1658,7 +1771,6 @@ export default function PedidosPage() {
   const {
     orders, products, priceTables, customers, members,
     isReady, addOrder, updateOrderStatus, deleteOrder, updateOrder
-    // saveOrders não existe no store original — usamos addOrder/updateOrder
   } = useSystemData();
 
   // ── Modais de ação ──
@@ -1692,10 +1804,8 @@ export default function PedidosPage() {
 
     if (isEdit && originalId) {
       await updateOrder(originalId, orderData);
-      toast({ title: "Pedido atualizado com sucesso." })
-    }
-    else {
-      const { isEdit, originalId, ...orderData } = data;
+      toast({ title: "Pedido atualizado com sucesso." });
+    } else {
       const newId = `PED-${1000 + orders.length + 1}`;
       const newOrder: Order = {
         id: newId,
@@ -1772,11 +1882,11 @@ export default function PedidosPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 px-2 sm:px-0">
       {/* ── Cabeçalho da Página ── */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-primary uppercase tracking-tight">Gestão de Pedidos</h1>
+          <h1 className="text-xl sm:text-2xl font-black text-primary uppercase tracking-tight">Gestão de Pedidos</h1>
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Controle comercial e fluxo de vendas</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1785,7 +1895,7 @@ export default function PedidosPage() {
             <FileText className="w-3.5 h-3.5" /> Cotação
           </Button>
           <Button size="sm" className="gap-2 font-black uppercase text-[10px] shadow-lg"
-            onClick={() => { setEditingOrder(null); setIsOrderFormOpen(true); }}>
+            onClick={() => { setEditingOrder(null); setPendingCart(undefined); setPendingCustomer(undefined); setPendingPriceList(undefined); setIsOrderFormOpen(true); }}>
             <Plus className="w-4 h-4" /> Novo Pedido
           </Button>
         </div>

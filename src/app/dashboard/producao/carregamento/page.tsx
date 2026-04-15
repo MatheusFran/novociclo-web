@@ -287,12 +287,11 @@ export default function CarregamentoPage() {
   const { orders, products, isReady } = useSystemData();
   const [charges, setCharges] = useState<LoadingCharge[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedVehicle, setSelectedVehicle] = useState('');
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [chargeObservations, setChargeObservations] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'TODAS' | 'PREPARACAO' | 'CARREGADO' | 'SAIU_ENTREGA'>('TODAS');
+  const [step, setStep] = useState<'vehicle' | 'orders' | 'paleting' | 'history'>('history');
+  const [tempCharge, setTempCharge] = useState<LoadingCharge | null>(null);
   const [expandedCharge, setExpandedCharge] = useState<string | null>(null);
-  const [editingChargeId, setEditingChargeId] = useState<string | null>(null);
 
   useEffect(() => {
     setCharges(loadChargesFromStorage());
@@ -312,10 +311,6 @@ export default function CarregamentoPage() {
     );
   }, [readyOrders, charges, searchTerm]);
 
-  const filteredCharges = useMemo(() => {
-    return charges.filter(c => filterStatus === 'TODAS' || c.status === filterStatus);
-  }, [charges, filterStatus]);
-
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrders(prev =>
       prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]
@@ -330,96 +325,65 @@ export default function CarregamentoPage() {
     }
   };
 
-  const createChargeFromOrders = () => {
-    if (selectedOrders.length === 0) {
+  const proceedToNextStep = () => {
+    if (step === 'vehicle' && !selectedVehicle) {
+      toast({ variant: "destructive", title: "Erro", description: "Selecione um veículo." });
+      return;
+    }
+    if (step === 'orders' && selectedOrders.length === 0) {
       toast({ variant: "destructive", title: "Erro", description: "Selecione pelo menos um pedido." });
       return;
     }
+    if (step === 'vehicle') setStep('orders');
+    else if (step === 'orders') {
+      const selectedOrdersData = readyOrders.filter(o => selectedOrders.includes(o.id));
+      const newCharge: LoadingCharge = {
+        id: `charge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        chargeNumber: `CRG-${format(new Date(), 'ddMMyy')}-${(charges.length + 1).toString().padStart(3, '0')}`,
+        ordersIds: selectedOrders,
+        cityDeliveries: [],
+        totalWeight: selectedOrdersData.reduce((sum, o) => sum + (o.totalWeight || 0), 0),
+        totalItems: selectedOrdersData.reduce((sum, o) => sum + calculateTotalItems(o.items), 0),
+        totalPalets: 0,
+        createdAt: new Date().toISOString(),
+        status: 'PREPARACAO',
+        observations: `Veículo: ${selectedVehicle}`,
+      };
+      setTempCharge(newCharge);
+      setStep('paleting');
+    }
+  };
 
-    const selectedOrdersData = readyOrders.filter(o => selectedOrders.includes(o.id));
+  const backStep = () => {
+    if (step === 'orders') {
+      setSelectedVehicle('');
+      setStep('vehicle');
+    } else if (step === 'paleting') {
+      setTempCharge(null);
+      setSelectedOrders([]);
+      setStep('orders');
+    }
+  };
 
-    const cityGroups: Record<string, typeof selectedOrdersData> = {};
-    selectedOrdersData.forEach(order => {
-      const city = order.city || 'Sem Cidade';
-      if (!cityGroups[city]) cityGroups[city] = [];
-      cityGroups[city].push(order);
-    });
-
-    const cityDeliveries: CityDelivery[] = [];
-    let globalPaletCount = 1;
-
-    Object.entries(cityGroups).forEach(([city, cityOrders], idx) => {
-      const loadOrder = idx === 0 ? 'PRIMEIRO' : 'ULTIMO';
-
-      const deliveries = cityOrders.map(order => {
-        const palets: Palet[] = [];
-        let currentPalet: Palet = {
-          id: `palet_${Date.now()}_${globalPaletCount}`,
-          number: globalPaletCount++,
-          items: [],
-          weight: 0,
-        };
-
-        order.items.forEach(item => {
-          const itemWeight = calculateItemWeight(item.productId, item.quantity, products);
-          if ((currentPalet.weight + itemWeight > 1000) || (currentPalet.items.length >= 50)) {
-            if (currentPalet.items.length > 0) {
-              palets.push(currentPalet);
-              currentPalet = {
-                id: `palet_${Date.now()}_${globalPaletCount}`,
-                number: globalPaletCount++,
-                items: [],
-                weight: 0,
-              };
-            }
-          }
-          currentPalet.items.push({ orderId: order.id, productId: item.productId, quantity: item.quantity });
-          currentPalet.weight += itemWeight;
-        });
-
-        if (currentPalet.items.length > 0) palets.push(currentPalet);
-
-        return {
-          orderId: order.id,
-          customerName: order.customerName,
-          customerPhone: order.customerPhone,
-          palets,
-        };
-      });
-
-      cityDeliveries.push({ city, loadOrder, deliveries });
-    });
-
-    const totalWeight = selectedOrdersData.reduce((sum, o) => sum + (o.totalWeight || 0), 0);
-    const totalItems = selectedOrdersData.reduce((sum, o) => sum + calculateTotalItems(o.items), 0);
-    const totalPalets = cityDeliveries.reduce((sum, c) =>
-      sum + c.deliveries.reduce((s, d) => s + d.palets.length, 0), 0);
-
-    const newCharge: LoadingCharge = {
-      id: `charge_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      chargeNumber: `CRG-${format(new Date(), 'ddMMyy')}-${(charges.length + 1).toString().padStart(3, '0')}`,
-      ordersIds: selectedOrders,
-      cityDeliveries,
-      totalWeight,
-      totalItems,
-      totalPalets,
-      createdAt: new Date().toISOString(),
-      status: 'PREPARACAO',
-      observations: chargeObservations,
+  const saveCharge = () => {
+    if (!tempCharge || tempCharge.cityDeliveries.length === 0) {
+      toast({ variant: "destructive", title: "Erro", description: "Crie pelo menos um palete." });
+      return;
+    }
+    const finalCharge: LoadingCharge = {
+      ...tempCharge,
+      status: 'CARREGADO',
+      totalPalets: tempCharge.cityDeliveries.reduce((sum, c) =>
+        sum + c.deliveries.reduce((s, d) => s + d.palets.length, 0), 0),
     };
-
-    const updated = [...charges, newCharge];
+    const updated = [...charges, finalCharge];
     setCharges(updated);
     saveChargesToStorage(updated);
-
-    toast({
-      title: "Carga Criada",
-      description: `${newCharge.chargeNumber} criada com ${selectedOrders.length} pedido(s).`
-    });
-
+    toast({ title: "Carga Salva", description: `${finalCharge.chargeNumber} carregada com sucesso!` });
+    setTempCharge(null);
+    setSelectedVehicle('');
     setSelectedOrders([]);
-    setChargeObservations('');
-    setIsDialogOpen(false);
+    setStep('history');
   };
 
   // ── Funções de edição ──
@@ -436,105 +400,66 @@ export default function CarregamentoPage() {
     saveChargesToStorage(updatedList);
   };
 
-  const handleMoveCityUp = (chargeId: string, cityIdx: number) => {
-    const charge = charges.find(c => c.id === chargeId)!;
-    if (cityIdx === 0) return;
-    const cities = [...charge.cityDeliveries];
-    [cities[cityIdx - 1], cities[cityIdx]] = [cities[cityIdx], cities[cityIdx - 1]];
-    // Reajusta loadOrder: primeiro = idx 0
-    const reordered = cities.map((c, i) => ({ ...c, loadOrder: i === 0 ? 'PRIMEIRO' as const : 'ULTIMO' as const }));
-    updateCharge(chargeId, { ...charge, cityDeliveries: reordered });
-  };
+  const addPaletToTemp = (cityName: string) => {
+    if (!tempCharge) return;
+    let cities = tempCharge.cityDeliveries;
+    let cityIdx = cities.findIndex(c => c.city === cityName);
 
-  const handleMoveCityDown = (chargeId: string, cityIdx: number, total: number) => {
-    const charge = charges.find(c => c.id === chargeId)!;
-    if (cityIdx === total - 1) return;
-    const cities = [...charge.cityDeliveries];
-    [cities[cityIdx], cities[cityIdx + 1]] = [cities[cityIdx + 1], cities[cityIdx]];
-    const reordered = cities.map((c, i) => ({ ...c, loadOrder: i === 0 ? 'PRIMEIRO' as const : 'ULTIMO' as const }));
-    updateCharge(chargeId, { ...charge, cityDeliveries: reordered });
-  };
+    if (cityIdx === -1) {
+      const newCity: CityDelivery = {
+        city: cityName,
+        loadOrder: cities.length === 0 ? 'PRIMEIRO' : 'ULTIMO',
+        deliveries: [{ orderId: selectedOrders[0], customerName: readyOrders.find(o => o.id === selectedOrders[0])?.customerName || '', palets: [] }],
+      };
+      cities = [...cities, newCity];
+      cityIdx = cities.length - 1;
+    }
 
-  const handleMovePaletUp = (chargeId: string, cityIdx: number, delIdx: number, paletIdx: number) => {
-    const charge = charges.find(c => c.id === chargeId)!;
-    const cities = [...charge.cityDeliveries];
-    const palets = [...cities[cityIdx].deliveries[delIdx].palets];
-    if (paletIdx === 0) return;
-    [palets[paletIdx - 1], palets[paletIdx]] = [palets[paletIdx], palets[paletIdx - 1]];
-    cities[cityIdx] = {
-      ...cities[cityIdx],
-      deliveries: cities[cityIdx].deliveries.map((d, i) => i === delIdx ? { ...d, palets } : d),
-    };
-    updateCharge(chargeId, { ...charge, cityDeliveries: cities });
-  };
-
-  const handleMovePaletDown = (chargeId: string, cityIdx: number, delIdx: number, paletIdx: number) => {
-    const charge = charges.find(c => c.id === chargeId)!;
-    const cities = [...charge.cityDeliveries];
-    const palets = [...cities[cityIdx].deliveries[delIdx].palets];
-    if (paletIdx === palets.length - 1) return;
-    [palets[paletIdx], palets[paletIdx + 1]] = [palets[paletIdx + 1], palets[paletIdx]];
-    cities[cityIdx] = {
-      ...cities[cityIdx],
-      deliveries: cities[cityIdx].deliveries.map((d, i) => i === delIdx ? { ...d, palets } : d),
-    };
-    updateCharge(chargeId, { ...charge, cityDeliveries: cities });
-  };
-
-  const handleUpdatePalet = (chargeId: string, cityIdx: number, delIdx: number, paletIdx: number, updatedPalet: Palet) => {
-    const charge = charges.find(c => c.id === chargeId)!;
-    const cities = [...charge.cityDeliveries];
-    const palets = cities[cityIdx].deliveries[delIdx].palets.map((p, i) => i === paletIdx ? updatedPalet : p);
-    cities[cityIdx] = {
-      ...cities[cityIdx],
-      deliveries: cities[cityIdx].deliveries.map((d, i) => i === delIdx ? { ...d, palets } : d),
-    };
-    updateCharge(chargeId, { ...charge, cityDeliveries: cities });
-  };
-
-  const handleDeletePalet = (chargeId: string, cityIdx: number, delIdx: number, paletIdx: number) => {
-    const charge = charges.find(c => c.id === chargeId)!;
-    const cities = [...charge.cityDeliveries];
-    const palets = cities[cityIdx].deliveries[delIdx].palets.filter((_, i) => i !== paletIdx);
-    cities[cityIdx] = {
-      ...cities[cityIdx],
-      deliveries: cities[cityIdx].deliveries.map((d, i) => i === delIdx ? { ...d, palets } : d),
-    };
-    updateCharge(chargeId, { ...charge, cityDeliveries: cities });
-  };
-
-  const handleAddPalet = (chargeId: string, cityIdx: number, delIdx: number) => {
-    const charge = charges.find(c => c.id === chargeId)!;
-    const delivery = charge.cityDeliveries[cityIdx].deliveries[delIdx];
     const newPalet: Palet = {
-      id: `palet_${Date.now()}_new`,
-      number: 0, // será renumerado
+      id: `palet_${Date.now()}_${Math.random()}`,
+      number: Math.max(0, ...cities.flatMap(c => c.deliveries.flatMap(d => d.palets.map(p => p.number)))) + 1,
       items: [],
       weight: 0,
     };
-    const cities = [...charge.cityDeliveries];
+
     cities[cityIdx] = {
       ...cities[cityIdx],
-      deliveries: cities[cityIdx].deliveries.map((d, i) =>
-        i === delIdx ? { ...d, palets: [...d.palets, newPalet] } : d
-      ),
+      deliveries: cities[cityIdx].deliveries.map((d, idx) => idx === 0 ? { ...d, palets: [...d.palets, newPalet] } : d),
     };
-    updateCharge(chargeId, { ...charge, cityDeliveries: cities });
+
+    setTempCharge({ ...tempCharge, cityDeliveries: cities });
   };
 
-  const handleUpdateChargeStatus = (chargeId: string, newStatus: LoadingCharge['status']) => {
-    const updated = charges.map(c => c.id === chargeId ? { ...c, status: newStatus } : c);
-    setCharges(updated);
-    saveChargesToStorage(updated);
-    toast({ title: "Status Atualizado" });
+  const updateTempPalet = (cityIdx: number, delIdx: number, paletIdx: number, updated: Palet) => {
+    if (!tempCharge) return;
+    const cities = [...tempCharge.cityDeliveries];
+    const palets = cities[cityIdx].deliveries[delIdx].palets.map((p, i) => i === paletIdx ? updated : p);
+    cities[cityIdx] = {
+      ...cities[cityIdx],
+      deliveries: cities[cityIdx].deliveries.map((d, i) => i === delIdx ? { ...d, palets } : d),
+    };
+    setTempCharge({ ...tempCharge, cityDeliveries: cities });
   };
 
-  const handleDeleteCharge = (chargeId: string) => {
-    const charge = charges.find(c => c.id === chargeId);
-    const updated = charges.filter(c => c.id !== chargeId);
-    setCharges(updated);
-    saveChargesToStorage(updated);
-    toast({ title: "Carga Deletada", description: `${charge?.chargeNumber} removida.` });
+  const deleteTempPalet = (cityIdx: number, delIdx: number, paletIdx: number) => {
+    if (!tempCharge) return;
+    const cities = [...tempCharge.cityDeliveries];
+    const palets = cities[cityIdx].deliveries[delIdx].palets.filter((_, i) => i !== paletIdx);
+    if (palets.length === 0) {
+      const deliveries = cities[cityIdx].deliveries.filter((_, i) => i !== delIdx);
+      if (deliveries.length === 0) {
+        const newCities = cities.filter((_, i) => i !== cityIdx);
+        setTempCharge(newCities.length > 0 ? { ...tempCharge, cityDeliveries: newCities } : null);
+        return;
+      }
+      cities[cityIdx] = { ...cities[cityIdx], deliveries };
+    } else {
+      cities[cityIdx] = {
+        ...cities[cityIdx],
+        deliveries: cities[cityIdx].deliveries.map((d, i) => i === delIdx ? { ...d, palets } : d),
+      };
+    }
+    setTempCharge({ ...tempCharge, cityDeliveries: cities });
   };
 
   const handleExportCharge = (charge: LoadingCharge) => {
@@ -548,8 +473,7 @@ export default function CarregamentoPage() {
             const itemWeight = calculateItemWeight(item.productId, item.quantity, products);
             rows.push({
               'CARGA': charge.chargeNumber,
-              'CIDADE': cityDel.city,
-              'ORDEM_CARREGAMENTO': cityDel.loadOrder,
+              'VEÍCULO': charge.observations.replace('Veículo: ', ''),
               'CLIENTE': delivery.customerName,
               'TELEFONE': delivery.customerPhone || '---',
               'PALETE': palet.number,
@@ -571,14 +495,13 @@ export default function CarregamentoPage() {
 
   if (!isReady) return null;
 
-  const chargedCount = charges.filter(c => c.status !== 'PREPARACAO').length;
-  const preparingCount = charges.filter(c => c.status === 'PREPARACAO').length;
+  const chargedCount = charges.filter(c => c.status === 'CARREGADO').length;
   const totalWeightForLoading = availableOrders.reduce((sum, o) => sum + (o.totalWeight || 0), 0);
 
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
         <Card className="border-none shadow-md">
           <CardContent className="p-3 sm:pt-6">
             <div className="flex items-center justify-between gap-2">
@@ -594,380 +517,98 @@ export default function CarregamentoPage() {
           <CardContent className="p-3 sm:pt-6">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-[8px] sm:text-[9px] font-black uppercase text-muted-foreground mb-0.5">Preparando</p>
-                <p className="text-xl sm:text-2xl font-black text-blue-600">{preparingCount}</p>
+                <p className="text-[8px] sm:text-[9px] font-black uppercase text-muted-foreground mb-0.5">Carregadas</p>
+                <p className="text-xl sm:text-2xl font-black text-green-600">{chargedCount}</p>
               </div>
-              <Box className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600/20" />
+              <Truck className="w-6 h-6 sm:w-8 sm:h-8 text-green-600/20" />
             </div>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-md hidden md:block">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
+        <Card className="border-none shadow-md">
+          <CardContent className="p-3 sm:pt-6">
+            <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Carregado</p>
-                <p className="text-2xl font-black text-green-600">{chargedCount}</p>
+                <p className="text-[8px] sm:text-[9px] font-black uppercase text-muted-foreground mb-0.5">Total Pendente</p>
+                <p className="text-xl sm:text-2xl font-black text-amber-600">{(totalWeightForLoading / 1000).toFixed(1)}T</p>
               </div>
-              <Truck className="w-8 h-8 text-green-600/20" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-none shadow-md hidden md:block">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Total a Entregar</p>
-                <p className="text-2xl font-black text-amber-600">{(totalWeightForLoading / 1000).toFixed(1)} ton</p>
-              </div>
-              <Weight className="w-8 h-8 text-amber-600/20" />
+              <Weight className="w-6 h-6 sm:w-8 sm:h-8 text-amber-600/20" />
             </div>
           </CardContent>
         </Card>
       </div>
-
-      <Tabs defaultValue="pedidos" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="pedidos" className="gap-2 font-bold text-xs uppercase">
-            <Package className="w-4 h-4" /> Pedidos
-          </TabsTrigger>
-          <TabsTrigger value="cargas" className="gap-2 font-bold text-xs uppercase">
-            <Truck className="w-4 h-4" /> Organizar
-          </TabsTrigger>
-        </TabsList>
-
-        {/* ABA PEDIDOS */}
-        <TabsContent value="pedidos" className="mt-4 sm:mt-6 space-y-4">
-          <div>
-            <h2 className="text-lg font-black uppercase tracking-tight">Pedidos Prontos</h2>
-            <p className="text-[10px] font-bold uppercase text-muted-foreground">Aprovados pela logística</p>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Buscar..." className="pl-8" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-          </div>
-          <Card className="border-none shadow-md overflow-x-auto">
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead className="text-[9px] font-black uppercase">Pedido</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase">Cliente</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-center">Itens</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-center hidden sm:table-cell">Peso</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase hidden sm:table-cell">Cidade</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase hidden md:table-cell">Telefone</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {availableOrders.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic text-xs opacity-40">
-                        {searchTerm ? 'Nenhum encontrado' : 'Todos carregados!'}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    availableOrders.map(order => (
-                      <TableRow key={order.id} className="hover:bg-muted/20 h-14">
-                        <TableCell><p className="text-[11px] font-black text-primary">{order.id}</p></TableCell>
-                        <TableCell><p className="text-xs font-bold">{order.customerName}</p></TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="outline" className="text-[9px]">{calculateTotalItems(order.items)}</Badge>
-                        </TableCell>
-                        <TableCell className="text-center hidden sm:table-cell">
-                          <p className="text-xs font-bold">{(order.totalWeight / 1000).toFixed(2)} ton</p>
-                        </TableCell>
-                        <TableCell className="hidden sm:table-cell">
-                          <div className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-muted-foreground" />
-                            <p className="text-xs font-bold">{order.city || '?'}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <div className="flex items-center gap-1">
-                            <Phone className="w-3 h-3 text-muted-foreground" />
-                            <p className="text-[10px] font-mono">{order.customerPhone || '---'}</p>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ABA ORGANIZAR */}
-        <TabsContent value="cargas" className="mt-4 sm:mt-6 space-y-4">
-          <div className="flex items-center justify-between gap-2">
+      {/* FLUXO PRINCIPAL */}
+      {step === 'history' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-black uppercase tracking-tight">🚚 Organizar Carga</h2>
-              <p className="text-[10px] font-bold uppercase text-muted-foreground">Arraste cidades e edite paletes</p>
+              <h2 className="text-lg font-black uppercase tracking-tight">📋 Histórico de Cargas</h2>
+              <p className="text-[10px] font-bold uppercase text-muted-foreground">Todas as cargas realizadas</p>
             </div>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="gap-2 font-bold text-xs sm:text-sm">
-                  <Plus className="w-4 h-4" /> Montar Carga
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-                <DialogHeader>
-                  <DialogTitle>Nova Carga</DialogTitle>
-                  <DialogDescription className="text-xs">Selecione pedidos — organizados por cidade automaticamente</DialogDescription>
-                </DialogHeader>
-                <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-                  <div className="flex items-center gap-2 p-3 bg-muted rounded-lg border sticky top-0 z-10">
-                    <Checkbox
-                      id="select-all"
-                      checked={selectedOrders.length === availableOrders.length && availableOrders.length > 0}
-                      onCheckedChange={handleSelectAllOrders}
-                    />
-                    <label htmlFor="select-all" className="text-sm font-bold cursor-pointer flex-1">
-                      Selecionar todos ({selectedOrders.length}/{availableOrders.length})
-                    </label>
-                  </div>
-                  {availableOrders.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground text-sm">Nenhum disponível</div>
-                  ) : (
-                    availableOrders.map(order => (
-                      <div key={order.id} className="flex items-start gap-3 p-3 border rounded-lg">
-                        <Checkbox
-                          id={`order-${order.id}`}
-                          checked={selectedOrders.includes(order.id)}
-                          onCheckedChange={() => handleSelectOrder(order.id)}
-                          className="mt-1"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <label htmlFor={`order-${order.id}`} className="text-sm font-bold cursor-pointer block truncate">{order.id}</label>
-                          <p className="text-xs text-muted-foreground truncate">{order.customerName}</p>
-                          <div className="flex gap-1.5 mt-1.5 flex-wrap">
-                            <Badge variant="outline" className="text-[9px]">{calculateTotalItems(order.items)} itens</Badge>
-                            <Badge variant="outline" className="text-[9px]">{(order.totalWeight / 1000).toFixed(2)} ton</Badge>
-                            <Badge variant="outline" className="text-[9px]">
-                              <MapPin className="w-2.5 h-2.5 mr-0.5" />{order.city || '?'}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  <div className="space-y-1.5 pt-4 border-t">
-                    <label className="text-[10px] font-black uppercase text-muted-foreground">Observações</label>
-                    <Input placeholder="Ex: Frágil..." value={chargeObservations} onChange={e => setChargeObservations(e.target.value)} className="text-sm" />
-                  </div>
-                </div>
-                <DialogFooter className="border-t pt-4">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
-                  <Button onClick={createChargeFromOrders} disabled={selectedOrders.length === 0}>
-                    <Truck className="w-4 h-4 mr-2" /> Montar Carga
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            <Button className="gap-2 font-bold text-xs sm:text-sm" onClick={() => setStep('vehicle')}>
+              <Plus className="w-4 h-4" /> Nova Carga
+            </Button>
           </div>
 
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-bold">Cargas Criadas</p>
-              <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as typeof filterStatus)}>
-                <SelectTrigger className="w-40 h-9 text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="TODAS">Todas</SelectItem>
-                  <SelectItem value="PREPARACAO">Preparação</SelectItem>
-                  <SelectItem value="CARREGADO">Carregado</SelectItem>
-                  <SelectItem value="SAIU_ENTREGA">Saiu Entrega</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {filteredCharges.length === 0 ? (
-              <Card className="border-none shadow-md">
-                <CardContent className="py-12 text-center text-muted-foreground text-sm">Nenhuma carga</CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-3">
-                {filteredCharges.map(charge => {
-                  const isExpanded = expandedCharge === charge.id;
-                  const isEditing = editingChargeId === charge.id;
-
-                  return (
-                    <Collapsible key={charge.id} open={isExpanded} onOpenChange={() => setExpandedCharge(isExpanded ? null : charge.id)}>
-                      <Card className="border-none shadow-md">
-                        {/* Header da carga */}
-                        <CollapsibleTrigger asChild>
-                          <CardContent className="p-3 sm:p-4 cursor-pointer hover:bg-muted/30">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <ChevronDown className={`w-4 h-4 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-180' : ''}`} />
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <Truck className="w-4 h-4 text-primary flex-shrink-0" />
-                                    <p className="text-sm font-black text-primary">{charge.chargeNumber}</p>
-                                    <Badge className={
-                                      charge.status === 'PREPARACAO' ? 'bg-yellow-100 text-yellow-800 text-[9px]' :
-                                        charge.status === 'CARREGADO' ? 'bg-blue-100 text-blue-800 text-[9px]' :
-                                          'bg-green-100 text-green-800 text-[9px]'
-                                    }>
-                                      {charge.status === 'PREPARACAO' ? 'Preparação' :
-                                        charge.status === 'CARREGADO' ? 'Carregado' : 'Saiu Entrega'}
-                                    </Badge>
-                                  </div>
-                                  <p className="text-[9px] text-muted-foreground mt-0.5">
-                                    {charge.ordersIds.length} pedido(s) · {charge.totalPalets} palete(s) · {(charge.totalWeight / 1000).toFixed(2)} ton
-                                  </p>
-                                </div>
+          {charges.length === 0 ? (
+            <Card className="border-none shadow-md">
+              <CardContent className="py-12 text-center text-muted-foreground text-sm">Nenhuma carga carregada ainda</CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {charges.map(charge => (
+                <Collapsible key={charge.id} open={expandedCharge === charge.id} onOpenChange={() => setExpandedCharge(expandedCharge === charge.id ? null : charge.id)}>
+                  <Card className="border-none shadow-md">
+                    <CollapsibleTrigger asChild>
+                      <CardContent className="p-3 sm:p-4 cursor-pointer hover:bg-muted/30">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <ChevronDown className={`w-4 h-4 transition-transform flex-shrink-0 ${expandedCharge === charge.id ? 'rotate-180' : ''}`} />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Truck className="w-4 h-4 text-primary flex-shrink-0" />
+                                <p className="text-sm font-black text-primary">{charge.chargeNumber}</p>
+                                <Badge className="bg-green-100 text-green-800 text-[9px]">✓ Carregada</Badge>
                               </div>
-                              <p className="text-xs text-muted-foreground flex-shrink-0">{format(new Date(charge.createdAt), 'dd/MM HH:mm')}</p>
-                            </div>
-                          </CardContent>
-                        </CollapsibleTrigger>
-
-                        <CollapsibleContent>
-                          <CardContent className="p-3 sm:p-4 pt-0 border-t space-y-4">
-                            {charge.observations && (
-                              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                                <p className="text-[9px] font-black uppercase text-blue-600 mb-1">Observações</p>
-                                <p className="text-xs text-blue-800">{charge.observations}</p>
-                              </div>
-                            )}
-
-                            {/* Toggle edição */}
-                            <div className="flex items-center justify-between">
-                              <p className="text-[10px] font-black uppercase text-muted-foreground">
-                                {charge.cityDeliveries?.length > 0 && ` cidade(s) — ${isEditing ? 'modo edição ativo' : 'clique em Editar para reorganizar'}`}
+                              <p className="text-[9px] text-muted-foreground mt-0.5">
+                                {charge.ordersIds.length} pedido(s) · {charge.totalPalets} palete(s) · {(charge.totalWeight / 1000).toFixed(2)} ton
                               </p>
-                              <Button
-                                size="sm"
-                                variant={isEditing ? 'default' : 'outline'}
-                                className="gap-1 text-xs h-7"
-                                onClick={() => setEditingChargeId(isEditing ? null : charge.id)}
-                              >
-                                {isEditing ? <><Check className="w-3 h-3" /> Salvo</> : <><Pencil className="w-3 h-3" /> Editar</>}
-                              </Button>
                             </div>
+                          </div>
+                          <p className="text-xs text-muted-foreground flex-shrink-0 whitespace-nowrap">{format(new Date(charge.createdAt), 'dd/MM HH:mm')}</p>
+                        </div>
+                      </CardContent>
+                    </CollapsibleTrigger>
 
-                            {/* Lista de cidades */}
-                            <div className="space-y-4">
-                              {(charge.cityDeliveries ?? []).map((cityDel, cityIdx) => (
-                                <div key={`${cityDel.city}-${cityIdx}`} className="border border-primary/20 rounded-xl overflow-hidden">
-                                  {/* Cabeçalho da cidade */}
-                                  <div className="bg-gradient-to-r from-primary/10 to-transparent p-2.5 sm:p-3 border-b border-primary/10">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
-                                        <div className="min-w-0">
-                                          <p className="text-sm font-black text-primary">📍 {cityDel.city}</p>
-                                          <p className="text-[8px] text-muted-foreground">
-                                            {cityDel.loadOrder === 'PRIMEIRO'
-                                              ? '↑ Carregar PRIMEIRO — fica na frente do caminhão'
-                                              : '↓ Carregar POR ÚLTIMO — fica atrás'}
-                                          </p>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-1 flex-shrink-0">
-                                        <Badge className={cityDel.loadOrder === 'PRIMEIRO' ? 'bg-green-100 text-green-800 text-[8px]' : 'bg-orange-100 text-orange-800 text-[8px]'}>
-                                          {cityDel.loadOrder === 'PRIMEIRO' ? '🔝 PRIMEIRO' : '🔚 ÚLTIMO'}
-                                        </Badge>
-                                        {isEditing && (
-                                          <div className="flex gap-0.5 ml-1">
-                                            <Button
-                                              size="sm" variant="ghost" className="h-6 w-6 p-0"
-                                              disabled={cityIdx === 0}
-                                              onClick={() => handleMoveCityUp(charge.id, cityIdx)}
-                                            >
-                                              <ArrowUp className="w-3 h-3" />
-                                            </Button>
-                                            <Button
-                                              size="sm" variant="ghost" className="h-6 w-6 p-0"
-                                              disabled={cityIdx === charge.cityDeliveries.length - 1}
-                                              onClick={() => handleMoveCityDown(charge.id, cityIdx, charge.cityDeliveries.length)}
-                                            >
-                                              <ArrowDown className="w-3 h-3" />
-                                            </Button>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
+                    <CollapsibleContent>
+                      <CardContent className="p-3 sm:p-4 pt-0 border-t space-y-3">
+                        {charge.observations && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <p className="text-[9px] font-black uppercase text-blue-600 mb-1">Informações</p>
+                            <p className="text-xs text-blue-800">{charge.observations}</p>
+                          </div>
+                        )}
 
-                                  {/* Entregas desta cidade */}
-                                  <div className="p-2.5 sm:p-3 space-y-3">
-                                    {cityDel.deliveries.map((delivery, delIdx) => (
-                                      <div key={`${delivery.orderId}-${delIdx}`} className="bg-muted/20 rounded-lg p-2.5">
-                                        {/* Cliente */}
-                                        <div className="flex items-center justify-between mb-2.5">
-                                          <div>
-                                            <p className="text-xs font-black text-primary">{delivery.customerName}</p>
-                                            {delivery.customerPhone && (
-                                              <div className="flex items-center gap-1 text-[9px] text-muted-foreground mt-0.5">
-                                                <Phone className="w-2.5 h-2.5" />
-                                                <span className="font-mono">{delivery.customerPhone}</span>
-                                              </div>
-                                            )}
-                                          </div>
-                                          <Badge variant="outline" className="text-[8px]">
-                                            {delivery.palets.length} palete(s)
-                                          </Badge>
-                                        </div>
-
-                                        {/* Paletes */}
-                                        <div className="space-y-2">
-                                          {delivery.palets.map((palet, paletIdx) => (
-                                            isEditing ? (
-                                              <PaletEditor
-                                                key={palet.id}
-                                                palet={palet}
-                                                products={products}
-                                                allProducts={products}
-                                                onUpdate={(updated) => handleUpdatePalet(charge.id, cityIdx, delIdx, paletIdx, updated)}
-                                                onDelete={() => handleDeletePalet(charge.id, cityIdx, delIdx, paletIdx)}
-                                                onMoveUp={() => handleMovePaletUp(charge.id, cityIdx, delIdx, paletIdx)}
-                                                onMoveDown={() => handleMovePaletDown(charge.id, cityIdx, delIdx, paletIdx)}
-                                                isFirst={paletIdx === 0}
-                                                isLast={paletIdx === delivery.palets.length - 1}
-                                              />
-                                            ) : (
-                                              // Modo visualização (igual ao original)
-                                              <div key={palet.id} className="bg-white border border-dashed border-primary/30 rounded p-2">
-                                                <div className="flex items-center justify-between mb-1.5">
-                                                  <div className="flex items-center gap-1.5">
-                                                    <Box className="w-3.5 h-3.5 text-primary" />
-                                                    <p className="text-[9px] font-black text-primary">Palete {palet.number}</p>
-                                                  </div>
-                                                  <div className="flex gap-1">
-                                                    <Badge variant="secondary" className="text-[7px]">{calculatePaletWeight(palet, products).toFixed(0)} kg</Badge>
-                                                    <Badge variant="secondary" className="text-[7px]">{palet.items.reduce((s, i) => s + i.quantity, 0)} un</Badge>
-                                                  </div>
-                                                </div>
-                                                <div className="bg-gray-50 rounded p-1.5 space-y-0.5">
-                                                  {palet.items.map((item, itemIdx) => {
-                                                    const product = products.find(p => p.id === item.productId);
-                                                    const itemWeight = calculateItemWeight(item.productId, item.quantity, products);
-                                                    return (
-                                                      <div key={itemIdx} className="flex justify-between items-center py-0.5 px-1">
-                                                        <span className="text-[8px] sm:text-[9px] font-semibold flex-1 truncate">{product?.name || item.productId}</span>
-                                                        <div className="flex gap-1.5 ml-2 flex-shrink-0">
-                                                          <span className="text-[8px] font-bold">{item.quantity} {product?.uom || 'UN'}</span>
-                                                          <span className="text-[8px] text-muted-foreground">{itemWeight.toFixed(0)} kg</span>
-                                                        </div>
-                                                      </div>
-                                                    );
-                                                  })}
-                                                </div>
-                                              </div>
-                                            )
+                        <div className="space-y-3">
+                          {charge.cityDeliveries?.map((cityDel, idx) => (
+                            <div key={idx} className="border border-primary/20 rounded-lg p-2.5 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs font-black text-primary">📍 {cityDel.city}</p>
+                                <Badge variant="outline" className="text-[8px]">{cityDel.deliveries.reduce((s, d) => s + d.palets.length, 0)} palete(s)</Badge>
+                              </div>
+                              {cityDel.deliveries.map((delivery, dIdx) => (
+                                <div key={dIdx} className="bg-muted/20 rounded p-2 text-[9px]">
+                                  <p className="font-bold text-primary">{delivery.customerName}</p>
+                                  {delivery.customerPhone && <p className="text-muted-foreground">{delivery.customerPhone}</p>}
+                                  <div className="mt-1.5 space-y-1">
+                                    {delivery.palets.map((palet, pIdx) => (
+                                      <div key={pIdx} className="bg-white border border-dashed rounded p-1.5 text-[8px]">
+                                        <p className="font-black">Palete {palet.number} • {calculatePaletWeight(palet, products).toFixed(0)}kg</p>
+                                        <div className="mt-1 space-y-0.5">
+                                          {palet.items.map((item, iIdx) => (
+                                            <p key={iIdx} className="text-muted-foreground">
+                                              {products.find(p => p.id === item.productId)?.name} × {item.quantity}
+                                            </p>
                                           ))}
-
-                                          {/* Adicionar palete (modo edição) */}
-                                          {isEditing && (
-                                            <Button
-                                              size="sm" variant="outline"
-                                              className="w-full h-7 text-[9px] gap-1 border-dashed"
-                                              onClick={() => handleAddPalet(charge.id, cityIdx, delIdx)}
-                                            >
-                                              <Plus className="w-3 h-3" /> Adicionar Palete
-                                            </Button>
-                                          )}
                                         </div>
                                       </div>
                                     ))}
@@ -975,41 +616,200 @@ export default function CarregamentoPage() {
                                 </div>
                               ))}
                             </div>
+                          ))}
+                        </div>
 
-                            {/* Ações da carga */}
-                            <div className="flex gap-2 pt-3 border-t flex-wrap">
-                              {charge.status === 'PREPARACAO' && (
-                                <Button size="sm" className="gap-1 text-xs flex-1 sm:flex-initial"
-                                  onClick={() => handleUpdateChargeStatus(charge.id, 'CARREGADO')}>
-                                  <CheckCircle2 className="w-3 h-3" /> Marcar Carregado
-                                </Button>
-                              )}
-                              {charge.status === 'CARREGADO' && (
-                                <Button size="sm" className="gap-1 text-xs flex-1 sm:flex-initial bg-green-600 hover:bg-green-700"
-                                  onClick={() => handleUpdateChargeStatus(charge.id, 'SAIU_ENTREGA')}>
-                                  <Truck className="w-3 h-3" /> Saiu Entrega
-                                </Button>
-                              )}
-                              <Button size="sm" variant="outline" className="gap-1 text-xs"
-                                onClick={() => handleExportCharge(charge)}>
-                                <Download className="w-3 h-3" /> Exportar
-                              </Button>
-                              <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-600 gap-1 text-xs"
-                                onClick={() => handleDeleteCharge(charge.id)}>
-                                <Trash2 className="w-3 h-3" /> Deletar
-                              </Button>
-                            </div>
-                          </CardContent>
-                        </CollapsibleContent>
-                      </Card>
-                    </Collapsible>
-                  );
-                })}
+                        <div className="flex gap-2 pt-3 border-t flex-wrap">
+                          <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => handleExportCharge(charge)}>
+                            <Download className="w-3 h-3" /> Exportar
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {/* STEP 1: SELECIONAR VEÍCULO */}
+      {step === 'vehicle' && (
+        <Card className="border-none shadow-md">
+          <CardContent className="p-4 sm:p-6 space-y-4">
+            <div>
+              <h2 className="text-lg font-black uppercase tracking-tight">🚚 Passo 1: Selecione o Veículo</h2>
+              <p className="text-[10px] font-bold uppercase text-muted-foreground">Qual veículo será usado neste carregamento?</p>
+            </div>
+            <div>
+              <label className="text-sm font-bold mb-2 block">Veículo / Placa</label>
+              <Input
+                placeholder="Ex: Volvo FH16 - ABC-1234"
+                value={selectedVehicle}
+                onChange={e => setSelectedVehicle(e.target.value)}
+                className="text-base"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setStep('history')}>Cancelar</Button>
+              <Button onClick={proceedToNextStep} disabled={!selectedVehicle}>Próximo</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* STEP 2: SELECIONAR PEDIDOS */}
+      {step === 'orders' && (
+        <div className="space-y-4">
+          <Card className="border-none shadow-md">
+            <CardContent className="p-4 sm:p-6 space-y-3">
+              <div>
+                <h2 className="text-lg font-black uppercase tracking-tight">📦 Passo 2: Selecione os Pedidos</h2>
+                <p className="text-[10px] font-bold uppercase text-muted-foreground">Veículo: {selectedVehicle}</p>
               </div>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input placeholder="Buscar..." className="pl-8" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-none shadow-md overflow-x-auto">
+            <CardContent className="p-0">
+              <div className="flex items-center gap-2 p-3 bg-muted border-b sticky">
+                <Checkbox checked={selectedOrders.length === availableOrders.length && availableOrders.length > 0} onCheckedChange={handleSelectAllOrders} />
+                <p className="text-sm font-bold flex-1">Selecionar todos ({selectedOrders.length}/{availableOrders.length})</p>
+              </div>
+              <div className="space-y-2 p-3">
+                {availableOrders.length === 0 ? (
+                  <p className="text-center py-8 text-muted-foreground text-sm">Todos os pedidos já estão carregados!</p>
+                ) : (
+                  availableOrders.map(order => (
+                    <div key={order.id} className="flex items-start gap-3 p-3 border rounded-lg hover:bg-muted/20">
+                      <Checkbox
+                        checked={selectedOrders.includes(order.id)}
+                        onCheckedChange={() => handleSelectOrder(order.id)}
+                        className="mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-primary">{order.id}</p>
+                        <p className="text-xs text-muted-foreground truncate">{order.customerName}</p>
+                        <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                          <Badge variant="outline" className="text-[9px]">{calculateTotalItems(order.items)} itens</Badge>
+                          <Badge variant="outline" className="text-[9px]">{(order.totalWeight / 1000).toFixed(2)} ton</Badge>
+                          <Badge variant="outline" className="text-[9px]"><MapPin className="w-2.5 h-2.5 mr-0.5" />{order.city || '?'}</Badge>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={backStep}>Voltar</Button>
+            <Button onClick={proceedToNextStep} disabled={selectedOrders.length === 0}>Próximo: Alocar Paletes</Button>
+          </div>
+        </div>
+      )}
+
+      {/* STEP 3: ALOCARpaletes */}
+      {step === 'paleting' && tempCharge && (
+        <div className="space-y-4">
+          <Card className="border-none shadow-md">
+            <CardContent className="p-4 sm:p-6 space-y-3">
+              <div>
+                <h2 className="text-lg font-black uppercase tracking-tight">📫 Passo 3: Aloque os Produtos em Paletes</h2>
+                <p className="text-[10px] font-bold uppercase text-muted-foreground">
+                  {tempCharge.chargeNumber} · {selectedOrders.length} pedido(s) · Total: {(tempCharge.totalWeight / 1000).toFixed(2)} ton
+                </p>
+              </div>
+
+              {/* Adicionar novo palete */}
+              <div>
+                <label className="text-sm font-bold mb-2 block">Adicionar Palete</label>
+                <div className="flex gap-2">
+                  <Select value="" onValueChange={(city) => {
+                    addPaletToTemp(city || 'Palete Genérico');
+                  }}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Selecione cliente ou deixe em branco" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">📦 Palete Genérico</SelectItem>
+                      {readyOrders.filter(o => selectedOrders.includes(o.id)).map(o => (
+                        <SelectItem key={o.id} value={o.customerName}>{o.customerName}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={() => addPaletToTemp('Palete Genérico')}>
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Paletes */}
+          <div className="space-y-3">
+            {tempCharge.cityDeliveries.flatMap((city, cityIdx) =>
+              city.deliveries.flatMap((delivery, delIdx) =>
+                delivery.palets.map((palet, paletIdx) => (
+                  <PaletEditor
+                    key={palet.id}
+                    palet={palet}
+                    products={products}
+                    allProducts={products}
+                    onUpdate={(updated) => updateTempPalet(cityIdx, delIdx, paletIdx, updated)}
+                    onDelete={() => deleteTempPalet(cityIdx, delIdx, paletIdx)}
+                    isFirst={paletIdx === 0}
+                    isLast={paletIdx === delivery.palets.length - 1}
+                  />
+                ))
+              )
             )}
           </div>
-        </TabsContent>
-      </Tabs>
+
+          {tempCharge.cityDeliveries.length === 0 && (
+            <Card className="border-none shadow-md bg-muted/30">
+              <CardContent className="py-8 text-center text-muted-foreground text-sm">
+                👇 Clique em "+ Adicionar Palete" para começar
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Resumo */}
+          {tempCharge.cityDeliveries.length > 0 && (
+            <Card className="border-none shadow-md bg-primary/5">
+              <CardContent className="p-4 space-y-2">
+                <p className="text-[10px] font-black uppercase text-muted-foreground">📊 Resumo da Carga</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <p className="text-[9px] text-muted-foreground">Paletes</p>
+                    <p className="text-xl font-black text-primary">{tempCharge.cityDeliveries.reduce((s, c) => s + c.deliveries.reduce((ss, d) => ss + d.palets.length, 0), 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-muted-foreground">Peso Total</p>
+                    <p className="text-xl font-black text-primary">{(tempCharge.cityDeliveries.reduce((s, c) => s + c.deliveries.reduce((ss, d) => ss + d.palets.reduce((sss, p) => sss + calculatePaletWeight(p, products), 0), 0), 0) / 1000).toFixed(2)}T</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-muted-foreground">Itens</p>
+                    <p className="text-xl font-black text-primary">{tempCharge.cityDeliveries.reduce((s, c) => s + c.deliveries.reduce((ss, d) => ss + d.palets.reduce((sss, p) => sss + p.items.reduce((ssss, i) => ssss + i.quantity, 0), 0), 0), 0)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={backStep}>Voltar</Button>
+            <Button onClick={saveCharge} disabled={tempCharge.cityDeliveries.length === 0} className="flex-1 bg-green-600 hover:bg-green-700">
+              <CheckCircle2 className="w-4 h-4 mr-2" /> Salvar Carga
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
