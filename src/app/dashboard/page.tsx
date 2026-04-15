@@ -110,27 +110,7 @@ function DashboardContent() {
         </div>
       </div>
 
-      {/* KPIs principais */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {[
-          { label: 'Vendas Faturadas', value: `R$ ${totalVendas.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, sub: `${orders.filter(o => o.status === 'FATURADO').length} pedidos`, color: 'border-green-400', icon: TrendingUp, iconColor: 'text-green-600' },
-          { label: 'Pipeline Comercial', value: `R$ ${totalPendente.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, sub: `${orders.filter(o => o.status === 'PENDENTE').length} aguardando`, color: 'border-yellow-400', icon: ShoppingCart, iconColor: 'text-yellow-600' },
-          { label: 'Em Trânsito', value: `R$ ${totalEmRota.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`, sub: `${orders.filter(o => o.status === 'ENTREGA').length} entregas ativas`, color: 'border-purple-400', icon: Truck, iconColor: 'text-purple-600' },
-        ].map((kpi, i) => (
-          <Card key={i} className={`border-none shadow-sm bg-white border-l-4 ${kpi.color} overflow-hidden`}>
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest mb-1">{kpi.label}</p>
-                  <p className="text-xl font-black">{kpi.value}</p>
-                  <p className="text-[9px] font-bold text-muted-foreground mt-0.5">{kpi.sub}</p>
-                </div>
-                <kpi.icon className={`w-5 h-5 ${kpi.iconColor} mt-1`} />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+
 
       {/* Funil de status */}
       <Card className="border-none shadow-sm bg-white">
@@ -162,7 +142,7 @@ function DashboardContent() {
       </Card>
 
       {/* Linha 3: Cidades + Expedição */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
 
         {/* Top cidades */}
         <Card className="border-none shadow-sm bg-white">
@@ -198,90 +178,6 @@ function DashboardContent() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Expedição */}
-        <Card className="border-none shadow-sm bg-white">
-          <CardContent className="p-4 space-y-4">
-            <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Expedição & Logística</p>
-
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: 'Sacos p/ Expedir', value: `${totalSacosExpedicao} un`, color: 'bg-blue-50 text-blue-700' },
-                { label: 'Peso p/ Expedir', value: `${totalPesoExpedicao.toFixed(0)} kg`, color: 'bg-blue-50 text-blue-700' },
-                { label: 'Veíc. Disponíveis', value: `${vehicles.filter(v => v.status === 'DISPONIVEL').length}`, color: 'bg-green-50 text-green-700' },
-                { label: 'Motoristas Livres', value: `${drivers.filter(d => d.status === 'DISPONIVEL').length}`, color: 'bg-green-50 text-green-700' },
-              ].map((item, i) => (
-                <div key={i} className={`rounded-lg p-3 ${item.color}`}>
-                  <p className="text-[8px] font-black uppercase opacity-60">{item.label}</p>
-                  <p className="text-lg font-black">{item.value}</p>
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-1.5 pt-1">
-              <p className="text-[8px] font-black uppercase text-muted-foreground">Pedidos liberados p/ entrega</p>
-              {orders.filter(o => o.status === 'FATURADO').slice(0, 3).map(o => (
-                <div key={o.id} className="flex items-center justify-between bg-teal-50 rounded-lg px-3 py-2">
-                  <div>
-                    <p className="text-[10px] font-black text-teal-700">{o.id}</p>
-                    <p className="text-[8px] font-bold text-teal-600 uppercase">{o.customerName} · {o.city}</p>
-                  </div>
-                  <span className="text-[9px] font-black text-teal-700">{o.items.reduce((s, i) => s + i.quantity, 0)} un</span>
-                </div>
-              ))}
-              {orders.filter(o => o.status === 'FATURADO').length === 0 && (
-                <p className="text-[9px] text-muted-foreground italic text-center py-3 opacity-40">Nenhum pedido liberado</p>
-              )}
-            </div>
-
-            <Button variant="outline" size="sm" className="w-full font-black uppercase text-[9px] gap-2" asChild>
-              <Link href="/dashboard/logistica">Ver Logística <ChevronRight className="w-3.5 h-3.5" /></Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Linha 4: Produção + Pedidos recentes */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-
-        {/* Produção */}
-        <Card className="border-none shadow-sm bg-primary text-primary-foreground lg:col-span-2">
-          <CardContent className="p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-[9px] font-black uppercase opacity-70 tracking-widest">Fábrica — PCP</p>
-              <Factory className="w-4 h-4 opacity-70" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: 'Na Fila', value: orders.filter(o => o.productionStage === 'FILA' && o.status === 'PRODUCAO').length },
-                { label: 'Em Processo', value: orders.filter(o => o.productionStage === 'PROCESSO' && o.status === 'PRODUCAO').length },
-                { label: 'Qualidade', value: orders.filter(o => o.productionStage === 'QUALIDADE' && o.status === 'PRODUCAO').length },
-                { label: 'Total OPs', value: orders.filter(o => o.status === 'PRODUCAO').length },
-              ].map((item, i) => (
-                <div key={i} className="bg-white/10 rounded-xl p-3 border border-white/20">
-                  <p className="text-[8px] font-black uppercase opacity-60">{item.label}</p>
-                  <p className="text-2xl font-black">{item.value}</p>
-                </div>
-              ))}
-            </div>
-            <div className="space-y-1.5">
-              {orders.filter(o => o.status === 'PRODUCAO').slice(0, 3).map(o => (
-                <div key={o.id} className="flex items-center justify-between bg-white/10 rounded-lg px-3 py-2">
-                  <span className="text-[10px] font-black font-mono">OP-{o.id.split('-')[1]}</span>
-                  <span className="text-[9px] font-bold opacity-70 uppercase truncate max-w-[100px]">{o.customerName}</span>
-                  <Badge className="bg-white/20 text-white border-none text-[7px] font-black uppercase">
-                    {o.productionStage || 'FILA'}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-            <Button variant="secondary" size="sm" className="w-full font-black uppercase text-[9px] gap-2" asChild>
-              <Link href="/dashboard/producao">Gerenciar Produção <ChevronRight className="w-3.5 h-3.5" /></Link>
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Pedidos recentes */}
         <Card className="border-none shadow-sm bg-white lg:col-span-3">
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-4">
@@ -337,7 +233,9 @@ function DashboardContent() {
             )}
           </CardContent>
         </Card>
+
       </div>
+
     </div>
   );
 }
@@ -360,74 +258,7 @@ export default function DashboardOverview() {
   return (
     <ProtectedRoute requireAuth={true}>
       <div className="min-h-screen bg-gray-50">
-        {/* Header com logout */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h1 className="text-xl font-black text-primary uppercase">NovoCiclo</h1>
-              {user && (
-                <Badge variant="outline" className="text-xs">
-                  {user.role}
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-4">
-              {user && (
-                <span className="text-sm text-muted-foreground">
-                  Olá, {user.name}
-                </span>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => signOut()}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Sair
-              </Button>
-            </div>
-          </div>
-        </div>
 
-        {/* Navigation */}
-        <div className="bg-white border-b border-gray-200 px-6 py-3">
-          <nav className="flex gap-6">
-            <Link href="/dashboard" className="text-sm font-medium text-primary border-b-2 border-primary pb-2">
-              Dashboard
-            </Link>
-            {availableModules.includes('pedidos') && (
-              <Link href="/dashboard/pedidos" className="text-sm font-medium text-muted-foreground hover:text-foreground pb-2">
-                Pedidos
-              </Link>
-            )}
-            {availableModules.includes('producao') && (
-              <Link href="/dashboard/producao" className="text-sm font-medium text-muted-foreground hover:text-foreground pb-2">
-                Produção
-              </Link>
-            )}
-            {availableModules.includes('faturamento') && (
-              <Link href="/dashboard/faturamento" className="text-sm font-medium text-muted-foreground hover:text-foreground pb-2">
-                Faturamento
-              </Link>
-            )}
-            {availableModules.includes('logistica') && (
-              <Link href="/dashboard/logistica" className="text-sm font-medium text-muted-foreground hover:text-foreground pb-2">
-                Logística
-              </Link>
-            )}
-            {availableModules.includes('vendas') && (
-              <Link href="/dashboard/vendas" className="text-sm font-medium text-muted-foreground hover:text-foreground pb-2">
-                Vendas
-              </Link>
-            )}
-            {availableModules.includes('usuarios') && (
-              <Link href="/dashboard/usuarios" className="text-sm font-medium text-muted-foreground hover:text-foreground pb-2">
-                Usuários
-              </Link>
-            )}
-          </nav>
-        </div>
 
         {/* Content */}
         <div className="p-6">

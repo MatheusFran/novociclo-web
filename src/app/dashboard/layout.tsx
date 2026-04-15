@@ -14,6 +14,8 @@ import {
   ChevronRight,
   BookDashed,
   BookOpen,
+  BoxSelect,
+  BoxesIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -39,28 +41,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const { user, signOut } = useAuth();
 
-  const isVendasActive =
-    pathname === '/dashboard/pedidos' || pathname === '/dashboard/crm' || pathname === '/dashboard/cotacao';
-
   const isProducaoActive =
     pathname === '/dashboard/producao' || pathname === '/dashboard/logistica/estoque';
 
-  const [vendasOpen, setVendasOpen] = useState(isVendasActive);
   const [producaoOpen, setProducaoOpen] = useState(isProducaoActive);
 
   const topItems = [
     { label: 'Visão Geral', icon: LayoutDashboard, path: '/dashboard' },
-  ];
-
-  const vendasSubItems = [
-    { label: 'CRM', icon: Users, path: '/dashboard/crm' },
     { label: 'Pedidos de Venda', icon: ShoppingCart, path: '/dashboard/pedidos' },
-    { label: 'Cotação', icon: BookOpen, path: '/dashboard/cotacao' },
   ];
 
   const producaoSubItems = [
     { label: 'Fila de Produção', icon: Package, path: '/dashboard/producao' },
     { label: 'Estoque', icon: Truck, path: '/dashboard/logistica/estoque' },
+    { label: 'Carregamento', icon: BoxesIcon, path: '/dashboard/producao/carregamento' },
   ];
 
   const bottomItems = [
@@ -71,15 +65,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   ];
 
   const allMenuItems = [...topItems, ...bottomItems];
-  const currentLabel = vendasSubItems.find(i => i.path === pathname)?.label
-    || producaoSubItems.find(i => i.path === pathname)?.label
+  const currentLabel = producaoSubItems.find(i => i.path === pathname)?.label
     || allMenuItems.find(m => m.path === pathname)?.label
-    || (isVendasActive ? 'Vendas' : isProducaoActive ? 'Produção' : 'Sistema');
+    || (isProducaoActive ? 'Produção' : 'Sistema');
 
   return (
     <ProtectedRoute requireAuth>
       <SidebarProvider>
-        <Sidebar collapsible="icon" className="no-print">
+        <Sidebar collapsible="icon" className="no-print bg-white [&>*]:bg-white">
+
           <SidebarHeader className="h-20 flex items-center px-4">
             <SidebarHeader className="h-20 flex items-center px-4">
               <Link href="/dashboard" className="flex items-center gap-3 group">
@@ -104,44 +98,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <Link href={item.path} className="flex items-center gap-3">
                       <item.icon className={`w-5 h-5 ${pathname === item.path ? 'text-primary' : 'text-muted-foreground'}`} />
                       <span className={`font-bold uppercase text-[11px] tracking-wider ${pathname === item.path ? 'text-primary' : 'text-muted-foreground'}`}>
-                        {item.label}
-                      </span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-
-              {/* Vendas — grupo expansível */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  tooltip="Vendas"
-                  isActive={isVendasActive}
-                  className="h-11 hover:bg-primary/5 data-[active=true]:bg-primary/10 cursor-pointer"
-                  onClick={() => setVendasOpen(v => !v)}
-                >
-                  <ShoppingCart className={`w-5 h-5 ${isVendasActive ? 'text-primary' : 'text-muted-foreground'}`} />
-                  <span className={`font-bold uppercase text-[11px] tracking-wider flex-1 ${isVendasActive ? 'text-primary' : 'text-muted-foreground'}`}>
-                    Vendas
-                  </span>
-                  {vendasOpen
-                    ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground group-data-[collapsible=icon]:hidden" />
-                    : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground group-data-[collapsible=icon]:hidden" />
-                  }
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Subitens de Vendas */}
-              {vendasOpen && vendasSubItems.map(item => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.path}
-                    tooltip={item.label}
-                    className="h-10 pl-8 hover:bg-primary/5 data-[active=true]:bg-primary/10 group-data-[collapsible=icon]:pl-0"
-                  >
-                    <Link href={item.path} className="flex items-center gap-3">
-                      <item.icon className={`w-4 h-4 ${pathname === item.path ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <span className={`font-bold uppercase text-[10px] tracking-wider ${pathname === item.path ? 'text-primary' : 'text-muted-foreground'}`}>
                         {item.label}
                       </span>
                     </Link>
@@ -225,19 +181,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </Sidebar>
 
         <SidebarInset>
-          <header className="h-16 flex items-center border-b px-6 bg-white/80 backdrop-blur-md sticky top-0 z-20 no-print">
+          <header className="h-14 md:h-16 flex items-center border-b px-4 md:px-6 bg-white/80 backdrop-blur-md sticky top-0 z-20 no-print">
             <SidebarTrigger />
-            <div className="flex-1 px-4">
-              <h1 className="text-xs font-black uppercase tracking-[0.2em] text-primary/60">
+            <div className="flex-1 px-3 md:px-4">
+              <h1 className="text-xs font-black uppercase tracking-[0.2em] text-primary/60 truncate">
                 {currentLabel}
               </h1>
             </div>
           </header>
-          <main className="flex-1 p-6 overflow-auto bg-slate-50/50">
+          <main className="flex-1 p-3 md:p-6 overflow-auto bg-slate-50/50">
             {children}
           </main>
         </SidebarInset>
       </SidebarProvider>
-    </ProtectedRoute>
+    </ProtectedRoute >
   );
 }
