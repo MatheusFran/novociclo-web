@@ -27,7 +27,12 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
       payload = { error: text || 'Unknown error' };
     }
     console.error(`[API FETCH] ${method} ${url} - ${res.status} ${res.statusText}`, payload);
-    throw new Error(`[API ${method} ${url}] ${res.status} ${res.statusText} - ${payload.error ?? JSON.stringify(payload)}`);
+    
+    // Se houver uma razão específica (ex: dependências), passe-a junto com o status
+    const error = new Error(`[API ${method} ${url}] ${res.status} ${res.statusText} - ${payload.reason || (payload.error ?? JSON.stringify(payload))}`);
+    (error as any).status = res.status;
+    (error as any).payload = payload;
+    throw error;
   }
 
   try {

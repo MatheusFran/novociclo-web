@@ -39,7 +39,7 @@ export default function LoginPage() {
           <div className="w-20 h-22 mx-auto">
             <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
           </div>
-          <CardTitle className="text-xl font-bold">Entrar</CardTitle>
+          {/* <CardTitle className="text-xl font-bold">Entrar</CardTitle> */}
         </CardHeader>
 
         <CardContent>

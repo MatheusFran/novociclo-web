@@ -97,10 +97,10 @@ function DashboardContent() {
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-black text-primary uppercase tracking-tight">Dashboard</h1>
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+          <h1 className="text-2xl sm:text-3xl font-black text-primary uppercase tracking-tight">Dashboard</h1>
+          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
             {format(new Date(), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
           </p>
         </div>
@@ -110,30 +110,57 @@ function DashboardContent() {
         </div>
       </div>
 
+      {/* KPIs Principais */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-[8px] sm:text-[9px] font-black uppercase text-muted-foreground mb-2">Faturado</p>
+            <p className="text-lg sm:text-2xl font-black text-green-600">R$ {(totalVendas / 1000).toFixed(0)}k</p>
+            <p className="text-[8px] text-muted-foreground mt-1">{orders.filter(o => o.status === 'FATURADO').length} ped</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-[8px] sm:text-[9px] font-black uppercase text-muted-foreground mb-2">Pendente</p>
+            <p className="text-lg sm:text-2xl font-black text-yellow-600">R$ {(totalPendente / 1000).toFixed(0)}k</p>
+            <p className="text-[8px] text-muted-foreground mt-1">{orders.filter(o => o.status === 'PENDENTE').length} ped</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-[8px] sm:text-[9px] font-black uppercase text-muted-foreground mb-2">Em Rota</p>
+            <p className="text-lg sm:text-2xl font-black text-purple-600">R$ {(totalEmRota / 1000).toFixed(0)}k</p>
+            <p className="text-[8px] text-muted-foreground mt-1">{orders.filter(o => o.status === 'ENTREGA').length} ped</p>
+          </CardContent>
+        </Card>
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-[8px] sm:text-[9px] font-black uppercase text-muted-foreground mb-2">Expedição</p>
+            <p className="text-lg sm:text-2xl font-black text-blue-600">{totalSacosExpedicao}</p>
+            <p className="text-[8px] text-muted-foreground mt-1">{(totalPesoExpedicao / 1000).toFixed(1)} ton</p>
+          </CardContent>
+        </Card>
+      </div>
 
-
-      {/* Funil de status */}
+      {/* Funil de Status */}
       <Card className="border-none shadow-sm bg-white">
-        <CardContent className="p-4">
-          <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest mb-4">Funil de Pedidos — Visão Geral do Fluxo</p>
-          <div className="grid grid-cols-6 gap-2">
+        <CardContent className="p-4 sm:p-6">
+          <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest mb-4">📊 Funil de Pedidos — Fluxo Completo</p>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
             {funnelData.map((stage, idx) => {
               const Icon = stage.icon;
               const isAlert = stage.count > 0 && (stage.key === 'PENDENTE' || stage.key === 'AGUARDANDO_FATURAMENTO');
               return (
-                <div key={stage.key} className="flex flex-col items-center gap-2 relative">
-                  {idx < funnelData.length - 1 && (
-                    <div className="absolute right-0 top-5 w-2 h-px bg-zinc-200 translate-x-1 z-10" />
-                  )}
-                  <div className={`w-full rounded-xl p-3 text-center ${stage.count > 0 ? stage.color.replace('bg-', 'bg-') + '/10 border border-' + stage.color.replace('bg-', '') + '/30' : 'bg-zinc-50 border border-zinc-100'}`}>
+                <div key={stage.key} className="flex flex-col items-center gap-2">
+                  <div className={`w-full rounded-lg p-3 text-center transition-all ${stage.count > 0 ? stage.color.replace('bg-', 'bg-') + '/10 border border-' + stage.color.replace('bg-', '') + '/30' : 'bg-zinc-50 border border-zinc-100'}`}>
                     <Icon className={`w-4 h-4 mx-auto mb-1 ${stage.count > 0 ? stage.textColor : 'text-zinc-300'}`} />
-                    <p className={`text-2xl font-black ${stage.count > 0 ? stage.textColor : 'text-zinc-300'}`}>{stage.count}</p>
+                    <p className={`text-xl sm:text-2xl font-black ${stage.count > 0 ? stage.textColor : 'text-zinc-300'}`}>{stage.count}</p>
                     {isAlert && stage.count > 0 && <div className="w-1.5 h-1.5 rounded-full bg-red-500 mx-auto mt-1 animate-pulse" />}
                   </div>
-                  <p className={`text-[8px] font-black uppercase text-center leading-tight ${stage.count > 0 ? stage.textColor : 'text-zinc-400'}`}>{stage.label}</p>
-                  {stage.value > 0 && (
-                    <p className="text-[8px] font-bold text-muted-foreground">R$ {(stage.value / 1000).toFixed(0)}k</p>
-                  )}
+                  <div className="text-center">
+                    <p className={`text-[7px] sm:text-[8px] font-black uppercase leading-tight ${stage.count > 0 ? stage.textColor : 'text-zinc-400'}`}>{stage.label}</p>
+                    {stage.value > 0 && <p className="text-[7px] text-muted-foreground mt-0.5">R$ {(stage.value / 1000).toFixed(0)}k</p>}
+                  </div>
                 </div>
               );
             })}
@@ -141,34 +168,34 @@ function DashboardContent() {
         </CardContent>
       </Card>
 
-      {/* Linha 3: Cidades + Expedição */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+      {/* Cidades + Recentes */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-        {/* Top cidades */}
-        <Card className="border-none shadow-sm bg-white">
-          <CardContent className="p-4">
+        {/* Top Cidades */}
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Top Cidades — Pedidos Ativos</p>
-              <MapPin className="w-3.5 h-3.5 text-primary" />
+              <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">📍 Top Cidades — Pedidos Ativos</p>
+              <MapPin className="w-4 h-4 text-primary flex-shrink-0" />
             </div>
             <div className="space-y-3">
               {topCidades.map(([city, data], idx) => (
-                <div key={city} className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-black text-muted-foreground w-4">{idx + 1}</span>
-                      <span className="text-[11px] font-black uppercase">{city}</span>
+                <div key={city} className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[9px] font-black text-muted-foreground w-5">{idx + 1}.</span>
+                      <span className="text-[11px] font-black uppercase truncate">{city}</span>
                     </div>
-                    <div className="text-right">
-                      <span className="text-[10px] font-black text-primary">R$ {data.value.toLocaleString()}</span>
+                    <div className="text-right flex-shrink-0">
+                      <span className="text-[10px] font-black text-primary">R$ {(data.value / 1000).toFixed(0)}k</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 pl-6">
-                    <div className="flex-1 h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-2 bg-zinc-100 rounded-full overflow-hidden">
                       <div className="h-full bg-primary rounded-full"
                         style={{ width: `${(data.value / topCidades[0][1].value) * 100}%` }} />
                     </div>
-                    <span className="text-[8px] font-bold text-muted-foreground whitespace-nowrap">{data.count} ped · {data.peso.toFixed(0)}kg</span>
+                    <span className="text-[8px] font-bold text-muted-foreground whitespace-nowrap">{data.count}p · {(data.peso / 1000).toFixed(1)}t</span>
                   </div>
                 </div>
               ))}
@@ -178,63 +205,65 @@ function DashboardContent() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-none shadow-sm bg-white lg:col-span-3">
-          <CardContent className="p-4">
+
+        {/* Pedidos Recentes */}
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">Pedidos Recentes</p>
-              <Button variant="ghost" size="sm" className="h-7 gap-1 font-black text-[9px] uppercase text-primary" asChild>
+              <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest">📋 Pedidos Recentes</p>
+              <Button variant="ghost" size="sm" className="h-7 gap-1 font-black text-[8px] sm:text-[9px] uppercase text-primary p-1 sm:px-2" asChild>
                 <Link href="/dashboard/pedidos">Ver todos <ChevronRight className="w-3 h-3" /></Link>
               </Button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-96 overflow-y-auto">
               {recentOrders.map(order => (
-                <div key={order.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-muted/30 transition-colors border border-transparent hover:border-muted">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-black text-xs">
-                      {order.customerName[0]}
+                <div key={order.id} className="flex items-center justify-between gap-2 py-2.5 px-3 rounded-lg hover:bg-muted/30 transition-colors border border-transparent hover:border-muted">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-black text-xs flex-shrink-0">
+                      {order.customerName[0]?.toUpperCase()}
                     </div>
-                    <div>
-                      <p className="text-[11px] font-black uppercase">{order.customerName}</p>
-                      <p className="text-[8px] font-bold text-muted-foreground">{order.id} · {order.city} · {format(new Date(order.createdAt), 'dd/MM/yy')}</p>
+                    <div className="min-w-0">
+                      <p className="text-[10px] sm:text-[11px] font-black uppercase truncate">{order.customerName}</p>
+                      <p className="text-[8px] text-muted-foreground truncate">{order.id}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black">R$ {(order.totalValue || 0).toLocaleString()}</span>
-                    <Badge variant="outline" className={`${statusColors[order.status] || ''} text-[7px] font-black uppercase px-1.5 h-4`}>
-                      {statusLabels[order.status] || order.status}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-[9px] sm:text-[10px] font-black whitespace-nowrap">R$ {(order.totalValue || 0) > 999 ? (order.totalValue / 1000).toFixed(0) + 'k' : order.totalValue}</span>
+                    <Badge variant="outline" className={`${statusColors[order.status] || ''} text-[7px] font-black uppercase px-1 h-4 flex-shrink-0`}>
+                      {statusLabels[order.status]?.substring(0, 3) || order.status.substring(0, 3)}
                     </Badge>
                   </div>
                 </div>
               ))}
             </div>
-
-            {/* Alertas */}
-            {(orders.filter(o => o.status === 'PENDENTE').length > 0 || orders.filter(o => o.status === 'AGUARDANDO_FATURAMENTO').length > 0) && (
-              <div className="mt-4 pt-3 border-t grid grid-cols-2 gap-2">
-                {orders.filter(o => o.status === 'PENDENTE').length > 0 && (
-                  <Link href="/dashboard/pedidos" className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 hover:bg-yellow-100 transition-colors">
-                    <AlertTriangle className="w-3.5 h-3.5 text-yellow-600 shrink-0" />
-                    <div>
-                      <p className="text-[8px] font-black uppercase text-yellow-700">Aprovação Pendente</p>
-                      <p className="text-[10px] font-black text-yellow-800">{orders.filter(o => o.status === 'PENDENTE').length} pedidos</p>
-                    </div>
-                  </Link>
-                )}
-                {orders.filter(o => o.status === 'AGUARDANDO_FATURAMENTO').length > 0 && (
-                  <Link href="/dashboard/faturamento" className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-lg px-3 py-2 hover:bg-indigo-100 transition-colors">
-                    <CreditCard className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                    <div>
-                      <p className="text-[8px] font-black uppercase text-indigo-700">Faturamento</p>
-                      <p className="text-[10px] font-black text-indigo-800">{orders.filter(o => o.status === 'AGUARDANDO_FATURAMENTO').length} pedidos</p>
-                    </div>
-                  </Link>
-                )}
-              </div>
-            )}
           </CardContent>
         </Card>
 
       </div>
+
+      {/* Alertas */}
+      {(orders.filter(o => o.status === 'PENDENTE').length > 0 || orders.filter(o => o.status === 'AGUARDANDO_FATURAMENTO').length > 0) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {orders.filter(o => o.status === 'PENDENTE').length > 0 && (
+            <Link href="/dashboard/pedidos" className="flex items-center gap-3 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3 hover:bg-yellow-100 transition-colors group">
+              <AlertTriangle className="w-5 h-5 text-yellow-600 shrink-0 group-hover:scale-110 transition-transform" />
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase text-yellow-700">⚠️ Aprovação Pendente</p>
+                <p className="text-[11px] font-black text-yellow-800">{orders.filter(o => o.status === 'PENDENTE').length} pedidos aguardando</p>
+              </div>
+            </Link>
+          )}
+          {orders.filter(o => o.status === 'AGUARDANDO_FATURAMENTO').length > 0 && (
+            <Link href="/dashboard/faturamento" className="flex items-center gap-3 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 hover:bg-indigo-100 transition-colors group">
+              <CreditCard className="w-5 h-5 text-indigo-600 shrink-0 group-hover:scale-110 transition-transform" />
+              <div className="min-w-0">
+                <p className="text-[9px] font-black uppercase text-indigo-700">💳 Faturamento Pendente</p>
+                <p className="text-[11px] font-black text-indigo-800">{orders.filter(o => o.status === 'AGUARDANDO_FATURAMENTO').length} pedidos para faturar</p>
+              </div>
+            </Link>
+          )}
+        </div>
+      )}
 
     </div>
   );

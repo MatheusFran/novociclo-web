@@ -56,6 +56,22 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   try {
+    // Verificar se há pedidos relacionados
+    const ordersCount = await prisma.order.count({
+      where: { customerId: id }
+    });
+
+    if (ordersCount > 0) {
+      return NextResponse.json(
+        { 
+          error: `Não é possível deletar este cliente`,
+          reason: `Existem ${ordersCount} pedido(s) associado(s) a este cliente`,
+          relatedCount: ordersCount
+        },
+        { status: 409 }
+      );
+    }
+
     await prisma.customer.delete({ where: { id } });
     return new NextResponse(null, { status: 204 });
   } catch (err) {

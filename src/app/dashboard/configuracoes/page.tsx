@@ -289,9 +289,26 @@ export default function ConfiguracoesPage() {
         case 'product': await deleteProduct(deleteTarget.id); break;
         case 'member': await deleteMember(deleteTarget.id); break;
       }
-      toast({ title: "Registro excluído." });
+      toast({ title: "Registro excluído com sucesso." });
     } catch (error) {
-      toast({ variant: "destructive", title: "Erro ao excluir", description: (error as Error)?.message });
+      const err = error as any;
+      
+      // Verificar se é erro de dependência (status 409)
+      if (err?.status === 409 || err?.payload?.reason) {
+        const reason = err?.payload?.reason || 'Este registro está relacionado com outros dados do sistema';
+        
+        toast({ 
+          variant: "destructive", 
+          title: "Não é possível deletar", 
+          description: reason
+        });
+      } else {
+        toast({ 
+          variant: "destructive", 
+          title: "Erro ao excluir", 
+          description: (error as Error)?.message || "Verifique se este registro está sendo usado em outras partes do sistema"
+        });
+      }
     } finally {
       setDeleteTarget(null);
       setLoading(false);

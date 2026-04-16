@@ -66,6 +66,22 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   try {
+    // Verificar se há pedidos usando esta tabela de preço
+    const ordersCount = await prisma.order.count({
+      where: { priceTableId: id }
+    });
+
+    if (ordersCount > 0) {
+      return NextResponse.json(
+        {
+          error: `Não é possível deletar esta tabela de preço`,
+          reason: `Existem ${ordersCount} pedido(s) usando esta tabela de preço`,
+          relatedCount: ordersCount
+        },
+        { status: 409 }
+      );
+    }
+
     await prisma.priceTable.delete({ where: { id } });
     return new NextResponse(null, { status: 204 });
   } catch (err) {

@@ -61,6 +61,38 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
   if (error) return NextResponse.json(error.body, { status: error.status });
 
   try {
+    // Verificar se há itens de pedido relacionados
+    const orderItemsCount = await prisma.orderItem.count({
+      where: { productId: id }
+    });
+
+    if (orderItemsCount > 0) {
+      return NextResponse.json(
+        {
+          error: `Não é possível deletar este produto`,
+          reason: `Existem ${orderItemsCount} item(ns) de pedido relacionado(s) a este produto`,
+          relatedCount: orderItemsCount
+        },
+        { status: 409 }
+      );
+    }
+
+    // Verificar se há itens em tabelas de preço
+    const priceItemsCount = await prisma.priceTableItem.count({
+      where: { productId: id }
+    });
+
+    if (priceItemsCount > 0) {
+      return NextResponse.json(
+        {
+          error: `Não é possível deletar este produto`,
+          reason: `Este produto está em ${priceItemsCount} tabela(s) de preço`,
+          relatedCount: priceItemsCount
+        },
+        { status: 409 }
+      );
+    }
+
     await prisma.product.delete({
       where: { id }
     });
