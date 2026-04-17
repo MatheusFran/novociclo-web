@@ -163,6 +163,19 @@ model DeliverySchedule {
   updatedAt     DateTime @updatedAt
 }
 
+model SalesGoal {
+  id        String   @id @default(cuid())
+  month     Int      @default(1)
+  year      Int      @default(2026)
+  revenue   Float    @default(0)
+  tons      Float    @default(0)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([year, month])
+}
+
 
 enum Role {
   ADMIN

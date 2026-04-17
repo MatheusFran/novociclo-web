@@ -226,6 +226,16 @@ export interface DeliverySchedule {
   cities: string[];
 }
 
+export interface SalesGoal {
+  id: string;
+  month: number;
+  year: number;
+  revenue: number;
+  tons: number;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 
 // Lista de cidades para autocomplete

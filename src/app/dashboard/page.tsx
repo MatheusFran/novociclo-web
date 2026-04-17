@@ -104,9 +104,16 @@ function DashboardContent() {
             {format(new Date(), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
           </p>
         </div>
-        <div className="flex items-center gap-2 text-[9px] font-bold text-muted-foreground uppercase">
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          Sistema operacional
+        <div className="flex items-center gap-2">
+          <Button asChild variant="default" size="sm" className="gap-2 font-black uppercase text-[9px] sm:text-[10px]">
+            <Link href="/dashboard/cockpit">
+              🚀 Cockpit
+            </Link>
+          </Button>
+          <div className="flex items-center gap-2 text-[9px] font-bold text-muted-foreground uppercase">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            Sistema operacional
+          </div>
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Order, Product, OrderStatus, ProductionStage, Vehicle, Driver, Member, Activity, Customer, PriceTable, DeliverySchedule } from '../lib/types';
+import { Order, Product, OrderStatus, ProductionStage, Vehicle, Driver, Member, Activity, Customer, PriceTable, DeliverySchedule, SalesGoal } from '../lib/types';
 import { add } from 'date-fns';
 
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
@@ -54,6 +54,7 @@ export function useSystemData() {
   const [members, setMembers] = useState<Member[]>([]);
   const [priceTables, setPriceTables] = useState<PriceTable[]>([]);
   const [deliverySchedules, setDeliverySchedules] = useState<DeliverySchedule[]>([]);
+  const [salesGoals, setSalesGoals] = useState<SalesGoal[]>([]);
   const [isReady, setIsReady] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,9 +70,10 @@ export function useSystemData() {
       api<Activity[]>('/api/activities'),
       api<PriceTable[]>('/api/price-tables'),
       api<DeliverySchedule[]>('/api/delivery-schedules'),
+      api<SalesGoal[]>('/api/sales-goals'),
     ]).then((results) => {
       const getValue = <T,>(result: PromiseSettledResult<T>, fallback: T) => result.status === 'fulfilled' ? result.value : fallback;
-      const [ordersResult, productsResult, vehiclesResult, driversResult, membersResult, customersResult, activitiesResult, priceTablesResult, deliverySchedulesResult] = results;
+      const [ordersResult, productsResult, vehiclesResult, driversResult, membersResult, customersResult, activitiesResult, priceTablesResult, deliverySchedulesResult, salesGoalsResult] = results;
 
       setOrders(getValue<Order[]>(ordersResult, []));
       setProducts(getValue<Product[]>(productsResult, []));
@@ -82,6 +84,7 @@ export function useSystemData() {
       setActivities(getValue<Activity[]>(activitiesResult, []));
       setPriceTables(getValue<PriceTable[]>(priceTablesResult, []));
       setDeliverySchedules(getValue<DeliverySchedule[]>(deliverySchedulesResult, []));
+      setSalesGoals(getValue<SalesGoal[]>(salesGoalsResult, []));
 
       const rejected = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
       if (rejected.length > 0) {
@@ -359,7 +362,7 @@ export function useSystemData() {
 
   return {
     orders, products, vehicles, drivers, customers,
-    activities, priceTables, deliverySchedules, members, isReady, hasError, error,
+    activities, priceTables, deliverySchedules, members, salesGoals, isReady, hasError, error,
     addOrder, updateOrder, deleteOrder,
     addProduct, updateProduct, deleteProduct,
     addVehicle, updateVehicle, deleteVehicle,
