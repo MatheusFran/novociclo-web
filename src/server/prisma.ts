@@ -3,6 +3,7 @@ import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
 const globalForPrisma = globalThis as unknown as { prisma: any };
 
+
 function createPrismaClient() {
     const adapter = new PrismaMariaDb({
         host: process.env.DB_HOST,
@@ -14,6 +15,9 @@ function createPrismaClient() {
     return new PrismaClient({ adapter });
 }
 
-export const prisma: any = globalForPrisma.prisma ?? createPrismaClient();
+// export const prisma: any = globalForPrisma.prisma ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+// if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+globalForPrisma.prisma = globalForPrisma.prisma ?? createPrismaClient();
+export const prisma = globalForPrisma.prisma;
