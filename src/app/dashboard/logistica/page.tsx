@@ -108,7 +108,7 @@ export default function LogisticaPage() {
 
   // ─── Derivações de pedidos ───────────────────────────────────────────────
   const expedicaoOrders = useMemo(() =>
-    orders.filter(o => o.status === 'AGUARDANDO_FATURAMENTO'), [orders]);
+    orders.filter(o => o.status === 'PRONTO_LOGISTICA'), [orders]);
 
   const aguardandoFaturamentoOrders = useMemo(() =>
     orders.filter(o => o.status === 'AGUARDANDO_FATURAMENTO'), [orders]);
