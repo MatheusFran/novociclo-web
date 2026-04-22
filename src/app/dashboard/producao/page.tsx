@@ -284,9 +284,17 @@ export default function ProducaoEstoquePage() {
                                   {stage === 'QUALIDADE' && (
                                     <Button size="sm"
                                       className="h-7 sm:h-8 gap-1 sm:gap-1.5 font-black text-[7px] sm:text-[9px] uppercase bg-green-600 hover:bg-green-700 text-nowrap"
-                                      onClick={() => {
-                                        updateOrderStatus(order.id, 'PRONTO_LOGISTICA', { approvedAt: new Date().toISOString() });
-                                        toast({ title: "Produção Aprovada", description: "Pedido enviado para expedição." });
+                                      onClick={async () => {
+                                        const result = await updateOrderStatus(order.id, 'PRONTO_LOGISTICA', { approvedAt: new Date().toISOString() });
+                                        if ((result as any).stockWarnings?.length) {
+                                          toast({
+                                            variant: 'destructive',
+                                            title: 'Atenção: Estoque Insuficiente',
+                                            description: (result as any).stockWarnings.join(' | '),
+                                          });
+                                        } else {
+                                          toast({ title: "Produção Aprovada", description: "Pedido enviado para expedição." });
+                                        }
                                       }}>
                                       <ShieldCheck className="w-3 sm:w-3.5 h-3 sm:h-3.5" /> <span className="hidden md:inline">Aprovar Produção</span><span className="md:hidden">Aprovar</span>
                                     </Button>
@@ -464,9 +472,17 @@ export default function ProducaoEstoquePage() {
                   {selectedOrderDetails.productionStage === 'QUALIDADE' && (
                     <Button size="sm"
                       className="h-8 gap-1.5 font-black text-[8px] sm:text-[9px] uppercase bg-green-600 hover:bg-green-700 text-nowrap"
-                      onClick={() => {
-                        updateOrderStatus(selectedOrderDetails.id, 'PRONTO_LOGISTICA', { approvedAt: new Date().toISOString() });
-                        toast({ title: "Produção Aprovada", description: "Pedido enviado para expedição." });
+                      onClick={async () => {
+                        const result = await updateOrderStatus(selectedOrderDetails.id, 'PRONTO_LOGISTICA', { approvedAt: new Date().toISOString() });
+                        if ((result as any).stockWarnings?.length) {
+                          toast({
+                            variant: 'destructive',
+                            title: 'Atenção: Estoque Insuficiente',
+                            description: (result as any).stockWarnings.join(' | '),
+                          });
+                        } else {
+                          toast({ title: "Produção Aprovada", description: "Pedido enviado para expedição." });
+                        }
                         setSelectedOrderDetails(null);
                       }}>
                       <ShieldCheck className="w-3 sm:w-3.5 h-3 sm:h-3.5" /> Aprovar
@@ -479,7 +495,7 @@ export default function ProducaoEstoquePage() {
                 </div>
               </div>
               <div className="flex-1 overflow-y-auto">
-                <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x">
+                <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x min-h-full">
                   <div className="p-4 sm:p-8 space-y-5 sm:space-y-7">
                     <div className="space-y-3">
                       <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-muted-foreground pb-2 border-b">Cliente</p>
@@ -553,6 +569,43 @@ export default function ProducaoEstoquePage() {
                     </div>
                   </div>
                 </div>
+              </div>
+              <div className="border-t bg-white px-4 sm:px-8 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
+                <div className="text-[9px] sm:text-[10px] font-bold text-muted-foreground">
+                  <p className="uppercase">Etapa: <span className={`font-black ${getStageColor(selectedOrderDetails.productionStage || 'FILA')}`}>{selectedOrderDetails.productionStage || 'FILA'}</span></p>
+                </div>
+                <Button
+                  className="w-full sm:w-auto h-9 gap-2 font-black text-[9px] sm:text-[10px] uppercase bg-primary hover:bg-primary/90 text-white text-nowrap"
+                  onClick={() => {
+                    const stage = selectedOrderDetails.productionStage || 'FILA';
+                    if (stage === 'FILA') {
+                      updateProductionStage(selectedOrderDetails.id, 'PROCESSO');
+                      toast({ title: "Produção Iniciada", description: "Pedido movido para processamento." });
+                    } else if (stage === 'PROCESSO') {
+                      updateProductionStage(selectedOrderDetails.id, 'QUALIDADE');
+                      toast({ title: "Pedido Conferido", description: "Aguardando aprovação final." });
+                    } else if (stage === 'QUALIDADE') {
+                      updateOrderStatus(selectedOrderDetails.id, 'PRONTO_LOGISTICA', { approvedAt: new Date().toISOString() }).then((result) => {
+                        if ((result as any).stockWarnings?.length) {
+                          toast({
+                            variant: 'destructive',
+                            title: 'Atenção: Estoque Insuficiente',
+                            description: (result as any).stockWarnings.join(' | '),
+                          });
+                        } else {
+                          toast({ title: "Produção Aprovada", description: "Pedido enviado para expedição." });
+                        }
+                      });
+                    }
+                    setSelectedOrderDetails(null);
+                  }}
+                >
+                  <ArrowRight className="w-4 h-4" />
+                  {selectedOrderDetails.productionStage === 'FILA' && 'Iniciar Produção'}
+                  {selectedOrderDetails.productionStage === 'PROCESSO' && 'Conferir e Aprovar'}
+                  {selectedOrderDetails.productionStage === 'QUALIDADE' && 'Liberar para Expedição'}
+                  {!selectedOrderDetails.productionStage && 'Iniciar Produção'}
+                </Button>
               </div>
             </div>
           )}

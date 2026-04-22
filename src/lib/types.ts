@@ -24,7 +24,8 @@ export type OrderStatus =
   | 'ENTREGA'
   | 'AGUARDANDO_FATURAMENTO'
   | 'FATURADO'
-  | 'REJEITADO';
+  | 'REJEITADO'
+  | 'ENTREGUE';
 
 export type ProductionStage = 'FILA' | 'PROCESSO' | 'QUALIDADE' | 'CONCLUIDO';
 
@@ -45,8 +46,17 @@ export type LeadStatus = 'NOVO' | 'CONTATADO' | 'QUALIFICADO' | 'PROPOSTA' | 'NE
 export type ActivityType = 'VISITA' | 'REUNIAO' | 'LIGACAO' | 'EMAIL' | 'WHATSAPP';
 export type LeadOrigin = 'SITE' | 'INDICACO' | 'LINKEDIN' | 'ANUNCIO' | 'OUTRO';
 export type CompanySize = 'MICRO' | 'PEQUENA' | 'MEDIA' | 'GRANDE';
-export type PaymentCondition = 'A_VISTA_ENTREGA' | 'BOLETO_15_DIAS' | 'BOLETO_30_DIAS' | 'BOLETO_30_60_90';
-
+export type PaymentCondition =
+  | 'A_VISTA_ENTREGA'
+  | 'BOLETO_15_DIAS'
+  | 'BOLETO_30_DIAS'
+  | 'BOLETO_30_60_90'
+  | 'BOLETO_30_60'
+  | 'CARTAO'
+  | 'CARTAO2X'
+  | 'PIX'
+  | 'BONIFICADO'
+  | 'OUTRO';
 export interface Member {
   id: string;
   name: string;
@@ -182,6 +192,7 @@ export interface Order {
   // Logística
   assignedVehicleId?: string;
   assignedDriverId?: string;
+  acceptedAt?: string;
   departureTime?: string;
   deliveredAt?: string;
 

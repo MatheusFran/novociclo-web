@@ -77,7 +77,8 @@ const STATUS_MAP: Record<OrderStatus, { label: string; color: string; icon: any 
   PRONTO_LOGISTICA: { label: 'Expedição', color: 'bg-blue-100 text-blue-800 border-blue-200', icon: Truck },
   ENTREGA: { label: 'Em Entrega', color: 'bg-purple-100 text-purple-800 border-purple-200', icon: Truck },
   AGUARDANDO_FATURAMENTO: { label: 'Financeiro', color: 'bg-indigo-100 text-indigo-800 border-indigo-200', icon: CreditCard },
-  FATURADO: { label: 'Finalizado', color: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle2 },
+  FATURADO: { label: 'Faturado', color: 'bg-green-100 text-green-800 border-green-200', icon: FileText },
+  ENTREGUE: { label: 'Entregue', color: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle2 },
   REJEITADO: { label: 'Rejeitado', color: 'bg-red-100 text-red-800 border-red-200', icon: AlertCircle },
 };
 
@@ -92,6 +93,12 @@ const PAYMENT_OPTIONS: { value: PaymentCondition; label: string }[] = [
   { value: 'BOLETO_15_DIAS', label: 'Boleto 15 Dias' },
   { value: 'BOLETO_30_DIAS', label: 'Boleto 30 Dias' },
   { value: 'BOLETO_30_60_90', label: 'Boleto 30/60/90' },
+  { value: 'BOLETO_30_60', label: 'Boleto 30/60' },
+  { value: 'CARTAO', label: 'Cartão' },
+  { value: 'CARTAO2X', label: 'Cartão 2X' },
+  { value: 'PIX', label: 'PIX' },
+  { value: 'BONIFICADO', label: 'Bonificado' },
+  { value: 'OUTRO', label: 'Outro' },
 ];
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50];
@@ -367,97 +374,121 @@ function OrderDetailsModal({
   );
 }
 
-// Componente de impressão do pedido
 function PrintOrderView({ order, products }: { order: Order; products: Product[] }) {
   return (
-    <div className="print-only fixed inset-0 bg-white p-10 z-[100]" style={{ fontFamily: 'Arial, sans-serif' }}>
-      <div className="max-w-[760px] mx-auto">
+    <div className="print-only fixed inset-0 bg-white z-[100]" style={{ fontFamily: 'Arial, sans-serif' }}>
+      <div className="max-w-[760px] mx-auto px-10 pt-10 pb-16">
         <DocHeader
           title={`#${order.id}`}
           subtitle="Documento de Venda"
           date={`Emissão: ${format(new Date(order.createdAt), 'dd/MM/yyyy')} às ${format(new Date(order.createdAt), 'HH:mm')}`}
         />
 
-        <div className="space-y-3 my-8">
+        {/* Dados do cliente */}
+        <div className="grid grid-cols-3 gap-x-8 gap-y-4 my-8 pb-8 border-b border-zinc-200">
           {[
-            { label: 'Endereço', value: order.customerAddress || '---', label2: 'Cidade - UF', value2: order.city || '---' },
-            { label: 'Vendedor', value: order.seller || '---', label2: 'Pagamento', value2: order.paymentCondition?.replace(/_/g, ' ') || '---' },
-          ].map((row, i) => (
-            <div key={i} className="flex gap-4">
-              <div className="flex flex-1 items-end gap-2">
-                <span className="text-[9px] font-black uppercase whitespace-nowrap text-zinc-400">{row.label}:</span>
-                <div className="flex-1 border-b border-zinc-300 text-[10px] font-bold uppercase pb-0.5">{row.value}</div>
-              </div>
-              <div className="flex w-56 items-end gap-2">
-                <span className="text-[9px] font-black uppercase whitespace-nowrap text-zinc-400">{row.label2}:</span>
-                <div className="flex-1 border-b border-zinc-300 text-[10px] font-bold uppercase pb-0.5">{row.value2}</div>
-              </div>
+            { label: 'Cliente', value: order.customerName },
+            { label: 'CPF / CNPJ', value: order.customerCpfCnpj },
+            { label: 'Cidade - UF', value: order.city },
+            { label: 'Endereço', value: order.customerAddress },
+            { label: 'Telefone', value: order.customerPhone },
+            { label: 'E-mail', value: order.customerEmail },
+            { label: 'Vendedor', value: order.seller },
+            { label: 'Pagamento', value: order.paymentCondition?.replace(/_/g, ' ') },
+            { label: 'Previsão de Entrega', value: order.deliveryDate ? format(new Date(order.deliveryDate), 'dd/MM/yyyy') : null },
+          ].map(({ label, value }) => (
+            <div key={label}>
+              <p className="text-[8px] font-black uppercase tracking-widest text-zinc-400 mb-0.5">{label}</p>
+              <p className="text-[10px] font-bold uppercase text-zinc-800 border-b border-zinc-200 pb-1">{value || '---'}</p>
             </div>
           ))}
         </div>
 
+        {/* Tabela de itens */}
         <table className="w-full border-collapse mb-8">
           <thead>
             <tr className="border-b-2 border-black">
-              {['Código', 'Produto', 'Qtd / Un', 'Unit.', 'Total'].map(h => (
-                <th key={h} className="text-left text-[9px] font-black uppercase tracking-widest pb-2">{h}</th>
-              ))}
+              <th className="text-left text-[9px] font-black uppercase tracking-widest pb-2 w-24">Código</th>
+              <th className="text-left text-[9px] font-black uppercase tracking-widest pb-2">Produto</th>
+              <th className="text-center text-[9px] font-black uppercase tracking-widest pb-2 w-20">Qtd</th>
+              <th className="text-right text-[9px] font-black uppercase tracking-widest pb-2 w-28">Unit.</th>
+              <th className="text-right text-[9px] font-black uppercase tracking-widest pb-2 w-28">Total</th>
             </tr>
           </thead>
           <tbody>
             {order.items.map((item, idx) => {
               const prod = products.find(p => p.id === item.productId);
               return (
-                <tr key={item.productId} className={`border-b border-zinc-100 ${idx % 2 === 0 ? 'bg-zinc-50' : ''}`}>
-                  <td className="py-2 text-[9px] font-mono text-zinc-400">{item.productId}</td>
-                  <td className="py-2 text-[10px] font-bold uppercase">{prod?.name}</td>
-                  <td className="py-2 text-center text-[10px] font-bold">
-                    {item.quantity} <span className="text-[8px] font-black text-zinc-400">{prod?.uom?.toUpperCase() || 'UN'}</span>
+                <tr key={item.productId} className={`border-b border-zinc-100 ${idx % 2 === 0 ? 'bg-zinc-50' : 'bg-white'}`}>
+                  <td className="py-2.5 text-[9px] font-mono text-zinc-400">{item.productId}</td>
+                  <td className="py-2.5 text-[10px] font-bold uppercase text-zinc-800">{prod?.name}</td>
+                  <td className="py-2.5 text-center text-[10px] font-bold">
+                    {item.quantity}
+                    <span className="text-[8px] font-black text-zinc-400 ml-1">{prod?.uom?.toUpperCase() || 'UN'}</span>
                   </td>
-                  <td className="py-2 text-right text-[10px] font-bold">R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                  <td className="py-2 text-right text-[10px] font-black">R$ {(item.price * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                  <td className="py-2.5 text-right text-[10px] font-bold text-zinc-600">
+                    R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="py-2.5 text-right text-[10px] font-black text-zinc-900">
+                    R$ {(item.price * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
 
+        {/* Rodapé */}
         <div className="flex justify-between items-start gap-12">
-          <div className="flex-1 space-y-10">
-            <div className="border border-zinc-200 p-3 h-20">
-              <p className="text-[8px] font-black uppercase text-zinc-400 mb-1">Observações:</p>
-              {(order as any).observations && (
-                <p className="text-[9px] font-medium text-zinc-600">{(order as any).observations}</p>
-              )}
+          <div className="flex-1 space-y-6">
+            {/* Observações */}
+            <div className="border border-zinc-200 rounded p-3 min-h-[64px]">
+              <p className="text-[8px] font-black uppercase tracking-widest text-zinc-400 mb-1">Observações</p>
+              <p className="text-[9px] font-medium text-zinc-600 leading-relaxed">
+                {(order as any).observations || ''}
+              </p>
             </div>
-            <div className="grid grid-cols-2 gap-16 mt-10">
+
+            {/* Assinaturas */}
+            <div className="grid grid-cols-2 gap-12 mt-6">
               {['Responsável Comercial', 'Assinatura do Cliente'].map(label => (
                 <div key={label} className="text-center">
-                  <div className="border-t border-black pt-2 mt-8">
-                    <p className="text-[8px] font-black uppercase text-zinc-400 tracking-widest">{label}</p>
+                  <div className="border-t border-zinc-400 pt-2 mt-12">
+                    <p className="text-[8px] font-black uppercase tracking-widest text-zinc-400">{label}</p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
-          <div className="w-56 space-y-1 text-[9px]">
-            <div className="flex justify-between font-bold text-zinc-500">
-              <span>Peso total:</span><span>{order.totalWeight?.toFixed(2)} KG</span>
+
+          {/* Totais */}
+          <div className="w-52 shrink-0 border border-zinc-200 rounded p-4 space-y-2">
+            <div className="flex justify-between text-[9px] font-bold text-zinc-500">
+              <span>Qtd. total</span>
+              <span>{order.items.reduce((acc, i) => acc + i.quantity, 0)} un</span>
             </div>
-            <div className="flex justify-between font-bold text-zinc-500">
-              <span>Qtd. itens:</span><span>{order.items.reduce((acc, i) => acc + i.quantity, 0)} un</span>
+            <div className="flex justify-between text-[9px] font-bold text-zinc-500">
+              <span>Peso total</span>
+              <span>{order.totalWeight?.toFixed(2)} KG</span>
             </div>
-            <div className="flex justify-between items-baseline pt-3 border-t-2 border-black mt-2">
-              <span className="text-xs font-black uppercase">Valor Total:</span>
-              <span className="text-2xl font-black">R$ {order.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <div className="flex justify-between items-baseline pt-3 border-t-2 border-black mt-1">
+              <span className="text-[10px] font-black uppercase">Total</span>
+              <span className="text-base font-black text-black">
+                R$ {order.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </span>
             </div>
           </div>
+        </div>
+
+        {/* Notas de rodapé */}
+        <div className="mt-10 pt-4 border-t border-zinc-200 space-y-0.5">
+          <p className="text-[7px] font-bold uppercase text-zinc-400 tracking-wide">* Documento gerado eletronicamente — não requer assinatura digital.</p>
+          <p className="text-[7px] font-bold uppercase text-zinc-400 tracking-wide">* Sujeito a confirmação de estoque no ato do pedido.</p>
         </div>
       </div>
     </div>
   );
 }
-
 
 // ─────────────────────────────────────────────
 // SUB-COMPONENTE — MODAL VISUALIZAR COTAÇÃO
@@ -475,72 +506,128 @@ function QuoteDetailsModal({
 }) {
   if (!quote) return null;
 
+  const totalItems = quote.items.reduce((acc, i) => acc + i.quantity, 0);
+
   return (
     <Dialog open={!!quote} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl w-[95vw] p-0 overflow-hidden bg-white">
-        <DialogTitle className="sr-only">{quote.id} - {quote.customerName}</DialogTitle>
+        <DialogTitle className="sr-only">{quote.id}</DialogTitle>
 
         <div className="flex flex-col max-h-[90vh]">
-          <div className="bg-primary px-4 sm:px-8 py-4 sm:py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shrink-0">
-            <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-0.5">{quote.id}</p>
-              <h2 className="text-lg sm:text-xl font-black uppercase text-white tracking-tight">{quote.customerName}</h2>
-              <div className="flex items-center gap-1.5 mt-1">
-                <MapPin className="w-3.5 h-3.5 text-white/60" />
-                <span className="text-sm font-black text-white/90 uppercase">{quote.customerCity || '---'}</span>
+          {/* Header */}
+          <div className="bg-primary px-6 py-5 shrink-0">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-white/50 mb-1">{quote.id}</p>
+                <h2 className="text-xl font-black uppercase text-white tracking-tight leading-tight">{quote.customerName}</h2>
+                <div className="flex flex-wrap items-center gap-3 mt-2">
+                  {quote.customerCity && (
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-white/70 uppercase">
+                      <MapPin className="w-3 h-3" /> {quote.customerCity}
+                    </span>
+                  )}
+                  {quote.customerPhone && (
+                    <span className="text-[10px] font-bold text-white/70">{quote.customerPhone}</span>
+                  )}
+                  <span className="text-[10px] font-bold text-white/50">
+                    {format(new Date(quote.createdAt), 'dd/MM/yyyy HH:mm')}
+                  </span>
+                </div>
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className={`${QUOTE_STATUS_MAP[quote.status]?.color} text-[9px] font-black uppercase px-3 h-6`}>
+              <Badge
+                variant="outline"
+                className={`${QUOTE_STATUS_MAP[quote.status]?.color} text-[9px] font-black uppercase px-3 h-6 shrink-0`}
+              >
                 {QUOTE_STATUS_MAP[quote.status]?.label}
               </Badge>
-              {quote.status === 'ABERTA' && (
-                <Button size="sm" className="h-8 gap-2 font-black text-[10px] uppercase bg-green-500 hover:bg-green-600 border-0"
-                  onClick={() => { onConvert(quote); onClose(); }}>
-                  <ArrowRight className="w-3.5 h-3.5" /> Converter em Pedido
-                </Button>
-              )}
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 sm:p-8 space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-4 border-b">
-              <InfoRow label="Contato" value={quote.customerPhone} />
-              <InfoRow label="Tabela de Preços" value={quote.priceTableId} />
-              <InfoRow label="Data" value={format(new Date(quote.createdAt), 'dd/MM/yyyy HH:mm')} />
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Resumo */}
+            <div className="grid grid-cols-3 divide-x border-b">
+              {[
+                { label: 'Itens', value: `${totalItems} un` },
+                { label: 'Tabela de Preços', value: quote.priceTableId },
+                { label: 'Valor Total', value: `R$ ${quote.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` },
+              ].map(({ label, value }) => (
+                <div key={label} className="px-5 py-4">
+                  <p className="text-[8px] font-black uppercase text-muted-foreground mb-1">{label}</p>
+                  <p className="text-sm font-black text-primary truncate">{value}</p>
+                </div>
+              ))}
             </div>
 
-            <InfoSection title="Itens da Cotação" icon={<Package className="w-3 h-3" />}>
-              <div className="space-y-2">
+            {/* Itens */}
+            <div className="px-6 py-5">
+              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2 mb-4 pb-2 border-b">
+                <Package className="w-3 h-3" /> Itens da Cotação
+              </p>
+
+              <div className="space-y-1">
+                {/* Cabeçalho */}
+                <div className="grid grid-cols-12 px-3 pb-2 text-[8px] font-black uppercase text-muted-foreground">
+                  <div className="col-span-5">Produto</div>
+                  <div className="col-span-2 text-center">Qtd</div>
+                  <div className="col-span-2 text-right">Unit.</div>
+                  <div className="col-span-2 text-right">Desconto</div>
+                  <div className="col-span-1 text-right">Total</div>
+                </div>
+
                 {quote.items.map((item, idx) => {
                   const prod = products.find(p => p.id === item.productId);
                   const total = item.price * item.quantity - (item.discount || 0);
                   return (
-                    <div key={item.productId}
-                      className={`flex items-center justify-between py-3 px-4 rounded-lg ${idx % 2 === 0 ? 'bg-muted/40' : ''}`}>
-                      <div className="flex-1 min-w-0">
+                    <div
+                      key={item.productId}
+                      className={`grid grid-cols-12 items-center px-3 py-2.5 rounded-lg ${idx % 2 === 0 ? 'bg-muted/40' : ''}`}
+                    >
+                      <div className="col-span-5 min-w-0">
                         <p className="text-[11px] font-black uppercase truncate">{prod?.name || item.productId}</p>
-                        <p className="text-[9px] text-muted-foreground font-bold">R$ {item.price.toLocaleString()} / {prod?.uom || 'un'}</p>
+                        <p className="text-[9px] text-muted-foreground font-bold font-mono">{item.productId}</p>
                       </div>
-                      <div className="text-right shrink-0 ml-4">
-                        <p className="text-[10px] font-black">
-                          <span className="text-primary font-black text-sm">{item.quantity}</span>
-                          <span className="text-[9px] font-black text-muted-foreground ml-1 uppercase">{prod?.uom || 'un'}</span>
-                          {item.discount ? <span className="text-[9px] text-red-400 ml-1">− R$ {item.discount.toLocaleString()}</span> : null}
-                        </p>
-                        <p className="text-xs font-black text-primary">R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      <div className="col-span-2 text-center">
+                        <span className="text-sm font-black text-primary">{item.quantity}</span>
+                        <span className="text-[9px] text-muted-foreground font-bold ml-1 uppercase">{prod?.uom || 'un'}</span>
+                      </div>
+                      <div className="col-span-2 text-right text-[10px] font-bold text-muted-foreground">
+                        R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </div>
+                      <div className="col-span-2 text-right text-[10px] font-bold text-red-400">
+                        {item.discount ? `− R$ ${item.discount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
+                      </div>
+                      <div className="col-span-1 text-right text-[11px] font-black text-primary">
+                        R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </InfoSection>
+            </div>
+          </div>
 
-            <div className="flex justify-between items-baseline pt-4 border-t">
-              <span className="text-xs font-black uppercase text-primary">Total da Cotação</span>
-              <span className="text-3xl font-black text-primary">
+          {/* Footer */}
+          <div className="border-t px-6 py-4 bg-muted/20 shrink-0 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-[8px] font-black uppercase text-muted-foreground">Valor Total</p>
+              <p className="text-2xl font-black text-primary">
                 R$ {quote.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </span>
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="font-bold uppercase text-[10px]" onClick={onClose}>
+                Fechar
+              </Button>
+              {quote.status === 'ABERTA' && (
+                <Button
+                  size="sm"
+                  className="gap-2 font-black uppercase text-[10px] bg-green-500 hover:bg-green-600 border-0"
+                  onClick={() => { onConvert(quote); onClose(); }}
+                >
+                  <ArrowRight className="w-3.5 h-3.5" /> Converter em Pedido
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -584,6 +671,7 @@ function QuoteDocument({
   customerCity,
   customerPhone,
   products,
+  priceTables, priceList,
   totalValue,
   totalWeight,
 }: {
@@ -595,6 +683,8 @@ function QuoteDocument({
   products: Product[];
   totalValue: number;
   totalWeight: number;
+  priceTables: PriceTable[];
+  priceList: string;
 }) {
   return (
     <div ref={quoteRef} className="bg-white mx-auto max-w-[760px] min-h-[1040px] flex flex-col" style={{ fontFamily: 'Arial, sans-serif' }}>
@@ -618,11 +708,12 @@ function QuoteDocument({
       </div>
 
       {/* Tabela de itens */}
+      {/* Tabela de itens */}
       <div className="px-10 py-6 flex-1">
         <table className="w-full text-sm border-collapse">
           <thead>
             <tr className="border-b-2 border-black">
-              {['Produto', 'Qtd / Un', 'Unit.', 'Desconto', 'Total'].map((h, i) => (
+              {['Produto', 'Qtd / Un', 'V. Tabela', 'V. Atualizado', 'Total'].map((h, i) => (
                 <th key={h} className={`text-[9px] font-black uppercase tracking-widest text-black pb-2 ${i === 0 ? 'text-left' : 'text-right'} ${i === 1 ? 'text-center w-20' : ''} ${[2, 3].includes(i) ? 'w-28' : ''}`}>
                   {h}
                 </th>
@@ -639,7 +730,8 @@ function QuoteDocument({
             )}
             {items.map((item, idx) => {
               const prod = products.find(p => p.id === item.productId);
-              const total = item.price * item.quantity - (item.discount || 0);
+              const tabelaPrice = getProductPrice(prod as Product, priceTables, priceList);
+              const total = item.price * item.quantity;
               return (
                 <tr key={item.productId} className={`border-b border-zinc-100 ${idx % 2 === 0 ? 'bg-zinc-50' : 'bg-white'}`}>
                   <td className="py-3 text-[11px] font-bold uppercase text-black">{prod?.name}</td>
@@ -647,11 +739,11 @@ function QuoteDocument({
                     {item.quantity}
                     <span className="text-[9px] text-zinc-400 font-black ml-1">{prod?.uom?.toUpperCase() || 'UN'}</span>
                   </td>
+                  <td className="py-3 text-right text-[11px] font-bold text-zinc-400">
+                    R$ {tabelaPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </td>
                   <td className="py-3 text-right text-[11px] font-bold text-black">
                     R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="py-3 text-right text-[11px] font-bold text-zinc-400">
-                    {item.discount ? `− R$ ${item.discount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—'}
                   </td>
                   <td className="py-3 text-right text-[11px] font-black text-black">
                     R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -705,7 +797,6 @@ function QuoteSidePanel({
   products,
   priceTables,
   totalValue,
-  totalCost,
 }: {
   items: OrderItem[];
   setItems: (items: OrderItem[]) => void;
@@ -716,11 +807,7 @@ function QuoteSidePanel({
   products: Product[];
   priceTables: PriceTable[];
   totalValue: number;
-  totalCost: number;
 }) {
-  const grossProfit = totalValue - totalCost;
-  const margin = totalValue > 0 ? ((grossProfit / totalValue) * 100).toFixed(1) : '0';
-
   const handleAddProduct = (productId: string) => {
     const prod = products.find(p => p.id === productId);
     if (!prod || items.find(i => i.productId === productId)) return;
@@ -735,7 +822,7 @@ function QuoteSidePanel({
     }));
   };
 
-  const handleItemChange = (productId: string, field: 'quantity' | 'discount', value: number) => {
+  const handleItemChange = (productId: string, field: 'quantity' | 'price', value: number) => {
     setItems(items.map(i => i.productId === productId ? { ...i, [field]: value } : i));
   };
 
@@ -784,7 +871,8 @@ function QuoteSidePanel({
             <p className="text-[9px] font-black uppercase text-muted-foreground border-b pb-1">Itens ({items.length})</p>
             {items.map((item) => {
               const prod = products.find(p => p.id === item.productId);
-              const total = item.price * item.quantity - (item.discount || 0);
+              const unitTotal = item.price - (item.discount || 0);
+              const grandTotal = unitTotal * item.quantity;
               return (
                 <div key={item.productId} className="bg-zinc-50 rounded-lg p-3 border space-y-2">
                   <div className="flex items-start justify-between gap-2">
@@ -801,48 +889,26 @@ function QuoteSidePanel({
                         onChange={e => handleItemChange(item.productId, 'quantity', parseInt(e.target.value) || 1)} />
                     </div>
                     <div className="space-y-1">
-                      <p className="text-[8px] font-black uppercase text-muted-foreground">Desconto R$</p>
-                      <Input type="number" min={0} className="h-7 text-xs text-center font-bold" placeholder="0" value={item.discount || ''}
-                        onChange={e => handleItemChange(item.productId, 'discount', parseFloat(e.target.value) || 0)} />
+                      <p className="text-[8px] font-black uppercase text-muted-foreground">V. Atualizado R$</p>
+                      <Input type="number" min={0} step="0.01" className="h-7 text-xs text-center font-bold" value={item.price}
+                        onChange={e => handleItemChange(item.productId, 'price', parseFloat(e.target.value) || getProductPrice(prod as Product, priceTables, priceList))} />
                     </div>
                   </div>
                   <div className="flex justify-between text-[9px]">
-                    <span className="text-muted-foreground font-bold">Unit: R$ {item.price.toLocaleString()}</span>
-                    <span className="font-black text-primary">Total: R$ {total.toLocaleString()}</span>
+                    <span className="text-muted-foreground font-bold">Tabela: R$ {getProductPrice(prod as Product, priceTables, priceList).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <span className="font-black text-primary">Total: R$ {(item.price * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               );
             })}
           </div>
         )}
-
-        {/* Análise de margem */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 border-b pb-1">
-            <Badge className="bg-blue-600 font-black text-[8px] h-4">INTERNO</Badge>
-            <p className="text-[9px] font-black uppercase text-blue-600">Análise de Margem</p>
-          </div>
-          <div className="bg-blue-50 rounded-lg p-3 border border-blue-100 space-y-2">
-            <div className="flex justify-between text-[10px]">
-              <span className="font-bold text-blue-700">Custo Total:</span>
-              <span className="font-black">R$ {totalCost.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between text-[10px]">
-              <span className="font-bold text-blue-700">Lucro Bruto:</span>
-              <span className="font-black text-green-600">R$ {grossProfit.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between text-[10px] pt-1 border-t border-blue-200">
-              <span className="font-black text-blue-800 uppercase">Margem:</span>
-              <span className="font-black text-blue-800 text-sm">{margin}%</span>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="p-4 border-t bg-zinc-50">
         <div className="flex justify-between items-baseline">
           <span className="text-[9px] font-black uppercase text-muted-foreground">Total da Cotação:</span>
-          <span className="text-lg font-black text-primary">R$ {totalValue.toLocaleString()}</span>
+          <span className="text-lg font-black text-primary">R$ {totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
         </div>
       </div>
     </div>
@@ -875,8 +941,7 @@ function QuoteGeneratorModal({
   const [customerPhone, setCustomerPhone] = useState('');
   const [priceList, setPriceList] = useState(priceTables[0]?.id || 'PADRAO');
 
-  const totalValue = items.reduce((acc, i) => acc + i.price * i.quantity - (i.discount || 0), 0);
-  const totalWeight = calcCartWeight(items, products);
+  const totalValue = items.reduce((acc, i) => acc + i.price * i.quantity, 0); const totalWeight = calcCartWeight(items, products);
   const totalCost = items.reduce((acc, item) => {
     const prod = products.find(p => p.id === item.productId);
     return acc + (0) * item.quantity;
@@ -956,12 +1021,14 @@ function QuoteGeneratorModal({
             customerPhone={customerPhone} setCustomerPhone={setCustomerPhone}
             priceList={priceList} setPriceList={setPriceList}
             products={products} priceTables={priceTables}
-            totalValue={totalValue} totalCost={totalCost}
+            totalValue={totalValue} 
           />
 
           {/* Área do documento */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-10 bg-zinc-100">
             <QuoteDocument
+              priceTables={priceTables}  // ← precisa estar aqui
+              priceList={priceList}
               quoteRef={quoteRef}
               items={items}
               customerName={customerName}
@@ -1379,6 +1446,7 @@ function OrdersTab({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [sellerFilter, setSellerFilter] = useState('ALL');
+  const [closingPersonFilter, setClosingPersonFilter] = useState('ALL');
   const [dateRange, setDateRange] = useState({ from: '', to: '' });
   const [groupByCity, setGroupByCity] = useState(false);
   const [page, setPage] = useState(1);
@@ -1392,14 +1460,15 @@ function OrdersTab({
         ((o.customerName || '').toLowerCase().includes(search.toLowerCase()) || (o.id || '').toLowerCase().includes(search.toLowerCase())) &&
         (statusFilter === 'ALL' || o.status === statusFilter) &&
         (sellerFilter === 'ALL' || o.seller === sellerFilter) &&
+        (closingPersonFilter === 'ALL' || (o as any).closingPerson === closingPersonFilter) &&
         (!dateRange.from || orderDate >= new Date(dateRange.from)) &&
         (!dateRange.to || orderDate <= new Date(dateRange.to))
       );
     });
-  }, [orders, search, statusFilter, sellerFilter, dateRange]);
+  }, [orders, search, statusFilter, sellerFilter, closingPersonFilter, dateRange]);
 
   // Reset página ao mudar filtros
-  useEffect(() => { setPage(1); }, [search, statusFilter, sellerFilter, dateRange, groupByCity]);
+  useEffect(() => { setPage(1); }, [search, statusFilter, sellerFilter, closingPersonFilter, dateRange, groupByCity]);
 
   const groupedOrders = useMemo(() => {
     if (!groupByCity) {
@@ -1432,7 +1501,8 @@ function OrdersTab({
   const totalFaturamento = filteredOrders.reduce((acc, o) => acc + (o.totalValue || 0), 0);
   const totalQuantidade = filteredOrders.reduce((acc, o) => acc + (o.items || []).reduce((s, i) => s + i.quantity, 0), 0);
   const totalKg = filteredOrders.reduce((acc, o) => acc + (o.totalWeight || 0), 0);
-  const allSellers = [...new Set(orders.map(o => o?.seller).filter(Boolean))];
+  const allSellers = members.map(m => m.name).filter(Boolean);
+  const allClosingPeople = members.map(m => m.name).filter(Boolean);
 
   return (
     <div className="space-y-4">
@@ -1479,6 +1549,16 @@ function OrdersTab({
                   <SelectContent>
                     <SelectItem value="ALL">Todos</SelectItem>
                     {allSellers.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase">Fechamento</label>
+                <Select value={closingPersonFilter} onValueChange={setClosingPersonFilter}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Todos</SelectItem>
+                    {allClosingPeople.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -1593,7 +1673,7 @@ function OrdersTab({
                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => onViewDetails(order)}>
                                   <Eye className="w-4 h-4" />
                                 </Button>
-                                {!['FATURADO', 'REJEITADO'].includes(order.status) && (
+                                {!['ENTREGUE', 'REJEITADO'].includes(order.status) && (
                                   <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={() => onEdit(order)}>
                                     <Edit3 className="w-4 h-4" />
                                   </Button>

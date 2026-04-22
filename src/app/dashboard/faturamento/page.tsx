@@ -18,7 +18,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   FileCheck, ShieldCheck, ShieldAlert, Loader2, Eye, Search,
-  History, CreditCard, User, MapPin, Package, FileText, Receipt
+  History, CreditCard, User, MapPin, Package, FileText, Receipt, Layers
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -37,6 +37,7 @@ export default function FaturamentoPage() {
   const [filaSearch, setFilaSearch] = useState('');
   const [filaDe, setFilaDe] = useState('');
   const [filaAte, setFilaAte] = useState('');
+  const [filaGroupByCity, setFilaGroupByCity] = useState(false);
 
   // Filtros histórico
   const [histSearch, setHistSearch] = useState('');
@@ -94,7 +95,7 @@ export default function FaturamentoPage() {
     setIsProcessing(faturarOrder.id);
     try {
       await new Promise(resolve => setTimeout(resolve, 1200));
-      updateOrderStatus(faturarOrder.id, 'ENTREGA', {
+      updateOrderStatus(faturarOrder.id, 'FATURADO', {
         invoicedAt: new Date().toISOString(),
         nfNumero: nfNumero.trim() || null,
         vendaDiretaNumero: vendaDireta.trim(),
@@ -167,7 +168,17 @@ export default function FaturamentoPage() {
           </div>
 
           <div className="bg-white border rounded-xl p-4 space-y-3">
-            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Filtros</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">Filtros</p>
+              <Button
+                variant={filaGroupByCity ? "default" : "ghost"}
+                size="sm"
+                className="h-7 gap-1.5 text-[9px] font-black uppercase"
+                onClick={() => setFilaGroupByCity(!filaGroupByCity)}
+              >
+                <Layers className="w-3.5 h-3.5" /> {filaGroupByCity ? 'Desagrupar' : 'Agrupar por Cidade'}
+              </Button>
+            </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <div className="relative md:col-span-2">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -187,67 +198,156 @@ export default function FaturamentoPage() {
 
           <Card className="border-none shadow-md overflow-hidden">
             <CardContent className="p-0">
-              <Table>
-                <TableHeader className="bg-muted/50">
-                  <TableRow>
-                    <TableHead className="text-[9px] font-black uppercase">Pedido</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase">Cliente</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase">Cidade</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase">Vendedor</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-center">Sacos</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-center">Peso</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-center">Emissão</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-right">Valor</TableHead>
-                    <TableHead className="text-[9px] font-black uppercase text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filaFiltered.length === 0 && (
+              {!filaGroupByCity ? (
+                <Table>
+                  <TableHeader className="bg-muted/50">
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-16 text-muted-foreground italic text-xs uppercase opacity-40">
-                        Nenhum pedido na fila.
-                      </TableCell>
+                      <TableHead className="text-[9px] font-black uppercase">Pedido</TableHead>
+                      <TableHead className="text-[9px] font-black uppercase">Cliente</TableHead>
+                      <TableHead className="text-[9px] font-black uppercase">Cidade</TableHead>
+                      <TableHead className="text-[9px] font-black uppercase">Vendedor</TableHead>
+                      <TableHead className="text-[9px] font-black uppercase text-center">Sacos</TableHead>
+                      <TableHead className="text-[9px] font-black uppercase text-center">Peso</TableHead>
+                      <TableHead className="text-[9px] font-black uppercase text-center">Emissão</TableHead>
+                      <TableHead className="text-[9px] font-black uppercase text-right">Valor</TableHead>
+                      <TableHead className="text-[9px] font-black uppercase text-right">Ações</TableHead>
                     </TableRow>
-                  )}
-                  {filaFiltered.map(order => {
-                    const totalSacos = order.items.reduce((acc: number, i: any) => acc + i.quantity, 0);
-                    return (
-                      <TableRow key={order.id} className="h-12 hover:bg-muted/20">
-                        <TableCell className="font-mono text-[11px] font-black text-primary">{order.id}</TableCell>
-                        <TableCell className="text-[11px] font-black uppercase">{order.customerName}</TableCell>
-                        <TableCell className="text-[10px] font-bold text-muted-foreground uppercase">{order.city || '---'}</TableCell>
-                        <TableCell className="text-[10px] font-bold text-muted-foreground">{order.seller || '---'}</TableCell>
-                        <TableCell className="text-center text-[10px] font-black">{totalSacos}</TableCell>
-                        <TableCell className="text-center text-[10px] font-black">{order.totalWeight?.toFixed(2)} kg</TableCell>
-                        <TableCell className="text-center text-[9px] font-bold text-muted-foreground">
-                          {format(new Date(order.createdAt), 'dd/MM/yyyy')}
-                        </TableCell>
-                        <TableCell className="text-right text-[11px] font-black">
-                          R$ {(order.totalValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1.5">
-                            <Button variant="outline" size="sm" className="h-8 gap-1.5 font-black text-[9px] uppercase border-2"
-                              onClick={() => setSelectedOrder(order)}>
-                              <Eye className="w-3.5 h-3.5" /> Ver
-                            </Button>
-                            <Button variant="outline" size="sm"
-                              className="h-8 gap-1.5 font-black text-[9px] uppercase border-2 text-red-600 border-red-200 hover:bg-red-50"
-                              onClick={() => handleReject(order.id)}>
-                              <ShieldAlert className="w-3.5 h-3.5" /> Rejeitar
-                            </Button>
-                            <Button size="sm"
-                              className="h-8 gap-1.5 font-black text-[9px] uppercase bg-green-600 hover:bg-green-700"
-                              onClick={() => openFaturarDialog(order)}>
-                              <ShieldCheck className="w-3.5 h-3.5" /> Faturar
-                            </Button>
-                          </div>
+                  </TableHeader>
+                  <TableBody>
+                    {filaFiltered.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={9} className="text-center py-16 text-muted-foreground italic text-xs uppercase opacity-40">
+                          Nenhum pedido na fila.
                         </TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                    )}
+                    {filaFiltered.map(order => {
+                      const totalSacos = order.items.reduce((acc: number, i: any) => acc + i.quantity, 0);
+                      return (
+                        <TableRow key={order.id} className="h-12 hover:bg-muted/20">
+                          <TableCell className="font-mono text-[11px] font-black text-primary">{order.id}</TableCell>
+                          <TableCell className="text-[11px] font-black uppercase">{order.customerName}</TableCell>
+                          <TableCell className="text-[10px] font-bold text-muted-foreground uppercase">{order.city || '---'}</TableCell>
+                          <TableCell className="text-[10px] font-bold text-muted-foreground">{order.seller || '---'}</TableCell>
+                          <TableCell className="text-center text-[10px] font-black">{totalSacos}</TableCell>
+                          <TableCell className="text-center text-[10px] font-black">{order.totalWeight?.toFixed(2)} kg</TableCell>
+                          <TableCell className="text-center text-[9px] font-bold text-muted-foreground">
+                            {format(new Date(order.createdAt), 'dd/MM/yyyy')}
+                          </TableCell>
+                          <TableCell className="text-right text-[11px] font-black">
+                            R$ {(order.totalValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1.5">
+                              <Button variant="outline" size="sm" className="h-8 gap-1.5 font-black text-[9px] uppercase border-2"
+                                onClick={() => setSelectedOrder(order)}>
+                                <Eye className="w-3.5 h-3.5" /> Ver
+                              </Button>
+                              <Button variant="outline" size="sm"
+                                className="h-8 gap-1.5 font-black text-[9px] uppercase border-2 text-red-600 border-red-200 hover:bg-red-50"
+                                onClick={() => handleReject(order.id)}>
+                                <ShieldAlert className="w-3.5 h-3.5" /> Rejeitar
+                              </Button>
+                              <Button size="sm"
+                                className="h-8 gap-1.5 font-black text-[9px] uppercase bg-green-600 hover:bg-green-700"
+                                onClick={() => openFaturarDialog(order)}>
+                                <ShieldCheck className="w-3.5 h-3.5" /> Faturar
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="space-y-0">
+                  {filaFiltered.length === 0 ? (
+                    <div className="text-center py-16 text-muted-foreground italic text-xs uppercase opacity-40">
+                      Nenhum pedido na fila.
+                    </div>
+                  ) : (
+                    Object.entries(
+                      filaFiltered.reduce<Record<string, any[]>>((acc, order) => {
+                        const city = order.city || 'SEM CIDADE';
+                        if (!acc[city]) acc[city] = [];
+                        acc[city].push(order);
+                        return acc;
+                      }, {})
+                    ).sort(([cityA], [cityB]) => cityA.localeCompare(cityB)).map(([city, orders]) => {
+                      const cityTotal = orders.reduce((acc, o) => acc + (o.totalValue || 0), 0);
+                      const citySacos = orders.reduce((acc, o) => acc + o.items.reduce((s: number, i: any) => s + i.quantity, 0), 0);
+                      return (
+                        <div key={city} className="border-b last:border-b-0">
+                          <div className="bg-primary/5 px-6 py-3 border-b sticky top-0 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-primary" />
+                              <p className="font-black uppercase text-sm text-primary">{city}</p>
+                            </div>
+                            <div className="flex items-center gap-6 text-[10px] font-black">
+                              <span className="text-muted-foreground">{(orders as any[]).length} pedidos</span>
+                              <span className="text-muted-foreground">{citySacos} sacos</span>
+                              <span className="text-primary">R$ {cityTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          </div>
+                          <Table>
+                            <TableHeader className="bg-muted/30">
+                              <TableRow>
+                                <TableHead className="text-[9px] font-black uppercase">Pedido</TableHead>
+                                <TableHead className="text-[9px] font-black uppercase">Cliente</TableHead>
+                                <TableHead className="text-[9px] font-black uppercase">Vendedor</TableHead>
+                                <TableHead className="text-[9px] font-black uppercase text-center">Sacos</TableHead>
+                                <TableHead className="text-[9px] font-black uppercase text-center">Peso</TableHead>
+                                <TableHead className="text-[9px] font-black uppercase text-center">Emissão</TableHead>
+                                <TableHead className="text-[9px] font-black uppercase text-right">Valor</TableHead>
+                                <TableHead className="text-[9px] font-black uppercase text-right">Ações</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {(orders as any[]).map(order => {
+                                const totalSacos = order.items.reduce((acc: number, i: any) => acc + i.quantity, 0);
+                                return (
+                                  <TableRow key={order.id} className="h-12 hover:bg-muted/20">
+                                    <TableCell className="font-mono text-[11px] font-black text-primary">{order.id}</TableCell>
+                                    <TableCell className="text-[11px] font-black uppercase">{order.customerName}</TableCell>
+                                    <TableCell className="text-[10px] font-bold text-muted-foreground">{order.seller || '---'}</TableCell>
+                                    <TableCell className="text-center text-[10px] font-black">{totalSacos}</TableCell>
+                                    <TableCell className="text-center text-[10px] font-black">{order.totalWeight?.toFixed(2)} kg</TableCell>
+                                    <TableCell className="text-center text-[9px] font-bold text-muted-foreground">
+                                      {format(new Date(order.createdAt), 'dd/MM/yyyy')}
+                                    </TableCell>
+                                    <TableCell className="text-right text-[11px] font-black">
+                                      R$ {(order.totalValue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <div className="flex justify-end gap-1.5">
+                                        <Button variant="outline" size="sm" className="h-8 gap-1.5 font-black text-[9px] uppercase border-2"
+                                          onClick={() => setSelectedOrder(order)}>
+                                          <Eye className="w-3.5 h-3.5" /> Ver
+                                        </Button>
+                                        <Button variant="outline" size="sm"
+                                          className="h-8 gap-1.5 font-black text-[9px] uppercase border-2 text-red-600 border-red-200 hover:bg-red-50"
+                                          onClick={() => handleReject(order.id)}>
+                                          <ShieldAlert className="w-3.5 h-3.5" /> Rejeitar
+                                        </Button>
+                                        <Button size="sm"
+                                          className="h-8 gap-1.5 font-black text-[9px] uppercase bg-green-600 hover:bg-green-700"
+                                          onClick={() => openFaturarDialog(order)}>
+                                          <ShieldCheck className="w-3.5 h-3.5" /> Faturar
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

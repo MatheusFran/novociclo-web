@@ -43,6 +43,28 @@ function CockpitContent() {
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
     }, []);
 
+    // Cálculo de métricas adicionais
+    const statusMetrics = useMemo(() => {
+        const emProducao = orders.filter(o => o.status === 'PRODUCAO').length;
+        const emLogistica = orders.filter(o => ['PRONTO_LOGISTICA', 'AGUARDANDO_FATURAMENTO'].includes(o.status)).length;
+        const emEntrega = orders.filter(o => o.status === 'ENTREGA').length;
+        const entregues = orders.filter(o => o.status === 'ENTREGUE').length;
+        const rejeitados = orders.filter(o => o.status === 'REJEITADO').length;
+        const totalAtivos = emProducao + emLogistica + emEntrega;
+        const totalProcessados = entregues + rejeitados;
+        
+        return {
+            emProducao,
+            emLogistica,
+            emEntrega,
+            entregues,
+            rejeitados,
+            totalAtivos,
+            totalProcessados,
+            eficienciaEntrega: totalProcessados > 0 ? ((entregues / totalProcessados) * 100).toFixed(1) : 0,
+        };
+    }, [orders]);
+
     const toggleFullscreen = async () => {
         if (!document.fullscreenElement) {
             await containerRef.current?.requestFullscreen();
@@ -210,38 +232,116 @@ function CockpitContent() {
             <div style={styles.bgGlow1} />
             <div style={styles.bgGlow2} />
 
-            {/* Header */}
-            <div style={styles.header}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <Image
-                        src="/logo.png"
-                        alt="NovoCiclo Logo"
-                        width={60}
-                        height={60}
-                        style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(16,185,129,0.2)' }}
-                    />
-                    <div>
-                        <div style={styles.headerTitle}>🚀 Resumo Comercial Ensacados - NovoCiclo</div>
-                        <div style={styles.headerSub}>
-                            {format(now, "MMMM 'de' yyyy", { locale: ptBR }).toUpperCase()}
+            {/* Header Premium */}
+            <div style={styles.headerPremium}>
+                {/* Logo Destaque */}
+                <div style={styles.logoSection}>
+                    <div style={styles.logoBadge}>
+                        <Image
+                            src="/logo.png"
+                            alt="NovoCiclo Logo"
+                            width={80}
+                            height={80}
+                            style={{ borderRadius: 12, boxShadow: '0 8px 24px rgba(16,185,129,0.35)', filter: 'drop-shadow(0 4px 12px rgba(16,185,129,0.2))' }}
+                        />
+                    </div>
+                    <div style={styles.logoText}>
+                        <div style={styles.logoTitle}>🚀 NOVOCIOLO COCKPIT</div>
+                        <div style={styles.logoSubtitle}>Resumo Comercial — Ensacados</div>
+                    </div>
+                </div>
+
+                {/* Info Centro */}
+                <div style={styles.headerCenter}>
+                    <div style={styles.monthBadge}>
+                        {format(now, "MMMM", { locale: ptBR }).toUpperCase()}
+                        <span style={styles.yearBadge}>{currentYear}</span>
+                    </div>
+                    <div style={styles.currentDateTime}>
+                        <div style={styles.clockTime}>
+                            {currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                        <div style={styles.clockDateText}>
+                            {currentTime.toLocaleDateString('pt-BR', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase()}
                         </div>
                     </div>
                 </div>
+
+                {/* Controles Direita */}
                 <div style={styles.headerRight}>
-                    <div style={styles.clockBlock}>
-                        <div style={styles.clockTime}>
-                            {currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                        </div>
-                        <div style={styles.clockDate}>
-                            {currentTime.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short' }).toUpperCase()}
-                        </div>
-                    </div>
                     <button style={styles.iconBtn} onClick={handleEditClick} title="Editar meta">
                         <Edit3 size={18} />
                     </button>
                     <button style={styles.iconBtn} onClick={toggleFullscreen} title="Tela cheia">
                         {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
                     </button>
+                </div>
+            </div>
+
+            {/* Status Rápido - 5 Cards */}
+            <div style={styles.statusBar}>
+                <div style={{ ...styles.statusCard, borderLeftColor: '#f59e0b' }}>
+                    <div style={styles.statusIcon}>📋</div>
+                    <div style={styles.statusContent}>
+                        <div style={styles.statusLabel}>EM PRODUÇÃO</div>
+                        <div style={styles.statusValue}>{statusMetrics.emProducao}</div>
+                    </div>
+                </div>
+                <div style={{ ...styles.statusCard, borderLeftColor: '#3b82f6' }}>
+                    <div style={styles.statusIcon}>📦</div>
+                    <div style={styles.statusContent}>
+                        <div style={styles.statusLabel}>LOGÍSTICA</div>
+                        <div style={styles.statusValue}>{statusMetrics.emLogistica}</div>
+                    </div>
+                </div>
+                <div style={{ ...styles.statusCard, borderLeftColor: '#8b5cf6' }}>
+                    <div style={styles.statusIcon}>🚚</div>
+                    <div style={styles.statusContent}>
+                        <div style={styles.statusLabel}>EM ROTA</div>
+                        <div style={styles.statusValue}>{statusMetrics.emEntrega}</div>
+                    </div>
+                </div>
+                <div style={{ ...styles.statusCard, borderLeftColor: '#22c55e' }}>
+                    <div style={styles.statusIcon}>✅</div>
+                    <div style={styles.statusContent}>
+                        <div style={styles.statusLabel}>ENTREGUES</div>
+                        <div style={styles.statusValue}>{statusMetrics.entregues}</div>
+                    </div>
+                </div>
+                <div style={{ ...styles.statusCard, borderLeftColor: '#ef4444' }}>
+                    <div style={styles.statusIcon}>❌</div>
+                    <div style={styles.statusContent}>
+                        <div style={styles.statusLabel}>REJEITADOS</div>
+                        <div style={styles.statusValue}>{statusMetrics.rejeitados}</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* KPIs Secundários */}
+            <div style={styles.metricsGrid}>
+                <div style={styles.metricCard}>
+                    <div style={styles.metricTop}>
+                        <div style={styles.metricIcon}>📊</div>
+                        <div style={styles.metricLabel}>TAXA DE EFICIÊNCIA</div>
+                    </div>
+                    <div style={styles.metricValue}>{statusMetrics.eficienciaEntrega}%</div>
+                    <div style={styles.metricSub}>Entrega/Total Processado</div>
+                </div>
+                <div style={styles.metricCard}>
+                    <div style={styles.metricTop}>
+                        <div style={styles.metricIcon}>🎯</div>
+                        <div style={styles.metricLabel}>PEDIDOS ATIVOS</div>
+                    </div>
+                    <div style={styles.metricValue}>{statusMetrics.totalAtivos}</div>
+                    <div style={styles.metricSub}>Prod + Log + Rota</div>
+                </div>
+                <div style={styles.metricCard}>
+                    <div style={styles.metricTop}>
+                        <div style={styles.metricIcon}>💼</div>
+                        <div style={styles.metricLabel}>PROCESSADOS</div>
+                    </div>
+                    <div style={styles.metricValue}>{statusMetrics.totalProcessados}</div>
+                    <div style={styles.metricSub}>Entregues + Rejeitados</div>
                 </div>
             </div>
 
@@ -388,7 +488,7 @@ function CockpitContent() {
                     {/* Gráfico Pedidos ao Longo do Tempo */}
                     <div style={styles.chartCard}>
                         <div style={styles.chartTitle}>📈 PEDIDOS AO LONGO DO TEMPO</div>
-                        <ResponsiveContainer width="100%" height={280}>
+                        <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={timeSeriesData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(16,185,129,0.1)" vertical={false} />
                                 <XAxis 
@@ -420,7 +520,7 @@ function CockpitContent() {
                     {/* Scatter Chart - Cidades */}
                     <div style={styles.chartCard}>
                         <div style={styles.chartTitle}>🗺️ CIDADES: TICKET MÉDIO vs TONELADAS</div>
-                        <ResponsiveContainer width="100%" height={280}>
+                        <ResponsiveContainer width="100%" height="100%">
                             <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(16,185,129,0.1)" />
                                 <XAxis 
@@ -527,15 +627,16 @@ function CockpitContent() {
 
 const styles: Record<string, React.CSSProperties> = {
     root: {
-        minHeight: '100vh',
+        width: '100vw',
+        height: '100vh',
         background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0f9ff 100%)',
         color: '#1e293b',
         position: 'relative',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        padding: '24px 32px',
-        gap: 20,
+        padding: '12px 16px',
+        gap: 10,
         boxSizing: 'border-box',
     },
     bgGrid: {
@@ -558,85 +659,239 @@ const styles: Record<string, React.CSSProperties> = {
         background: 'radial-gradient(circle, rgba(34,197,94,0.12) 0%, transparent 70%)',
         pointerEvents: 'none',
     },
-    header: {
+    headerPremium: {
         position: 'relative', zIndex: 1,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        borderBottom: '2px solid rgba(16,185,129,0.2)',
-        paddingBottom: 16,
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(240,253,244,0.9) 100%)',
+        borderBottom: '2px solid rgba(16,185,129,0.3)',
+        borderRadius: '12px 12px 6px 6px',
+        padding: '12px 16px',
+        gap: 16,
+        boxShadow: '0 4px 16px rgba(16,185,129,0.1)',
+        backdropFilter: 'blur(8px)',
+        flex: '0 0 auto',
     },
-    headerTitle: {
-        fontSize: 28,
+    logoSection: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        flex: '0 0 auto',
+    },
+    logoBadge: {
+        position: 'relative',
+        padding: 6,
+        borderRadius: 12,
+        background: 'linear-gradient(135deg, rgba(16,185,129,0.1), rgba(34,197,94,0.1))',
+        border: '2px solid rgba(16,185,129,0.2)',
+    },
+    logoText: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+    },
+    logoTitle: {
+        fontSize: 22,
         fontWeight: 900,
-        letterSpacing: '0.12em',
+        letterSpacing: '0.15em',
         color: '#047857',
-        textShadow: '0 0 30px rgba(16,185,129,0.2)',
+        textShadow: '0 2px 4px rgba(16,185,129,0.15)',
     },
-    headerSub: {
+    logoSubtitle: {
         fontSize: 11,
-        letterSpacing: '0.2em',
+        letterSpacing: '0.12em',
+        color: '#078d51',
+        fontWeight: 600,
+    },
+    headerCenter: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 20,
+        flex: 1,
+        justifyContent: 'center',
+    },
+    monthBadge: {
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        fontSize: 14,
+        fontWeight: 900,
+        color: '#047857',
+        backgroundColor: 'rgba(16,185,129,0.1)',
+        borderRadius: 8,
+        padding: '8px 12px',
+        border: '2px solid rgba(16,185,129,0.2)',
+        letterSpacing: '0.1em',
+    },
+    yearBadge: {
+        fontSize: 12,
+        fontWeight: 700,
         color: '#059669',
-        marginTop: 4,
+        opacity: 0.8,
+    },
+    currentDateTime: {
+        textAlign: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+    },
+    clockTime: {
+        fontSize: 24,
+        fontWeight: 900,
+        color: '#059669',
+        letterSpacing: '0.08em',
+        lineHeight: 1,
+    },
+    clockDateText: {
+        fontSize: 9,
+        color: '#078d51',
+        letterSpacing: '0.15em',
         fontWeight: 700,
     },
     headerRight: {
-        display: 'flex', alignItems: 'center', gap: 16,
-    },
-    clockBlock: {
-        textAlign: 'right',
-    },
-    clockTime: {
-        fontSize: 26,
-        fontWeight: 900,
-        color: '#059669',
-        letterSpacing: '0.05em',
-        lineHeight: 1,
-    },
-    clockDate: {
-        fontSize: 10,
-        color: '#078d51',
-        letterSpacing: '0.15em',
-        marginTop: 3,
-        fontWeight: 700,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        flex: '0 0 auto',
     },
     iconBtn: {
         background: '#ecfdf5',
-        border: '1px solid rgba(16,185,129,0.3)',
+        border: '2px solid rgba(16,185,129,0.3)',
         borderRadius: 8,
         color: '#059669',
         cursor: 'pointer',
-        padding: '8px 10px',
-        display: 'flex', alignItems: 'center',
-        transition: 'all 0.2s',
+        padding: '10px 12px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'all 0.3s',
+        fontSize: 0,
+    },
+    statusBar: {
+        position: 'relative',
+        zIndex: 1,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(5, 1fr)',
+        gap: 8,
+        flex: '0 0 auto',
+    },
+    statusCard: {
+        background: 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)',
+        border: '2px solid rgba(16,185,129,0.15)',
+        borderLeft: '4px solid',
+        borderRadius: 12,
+        padding: '14px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+        transition: 'all 0.3s ease',
+        cursor: 'default',
+    },
+    statusIcon: {
+        fontSize: 24,
+        fontWeight: 900,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    statusContent: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1,
+    },
+    statusLabel: {
+        fontSize: 8,
+        fontWeight: 900,
+        color: '#6b7280',
+        letterSpacing: '0.12em',
+    },
+    statusValue: {
+        fontSize: 18,
+        fontWeight: 900,
+        color: '#1f2937',
+        lineHeight: 1,
+    },
+    metricsGrid: {
+        position: 'relative',
+        zIndex: 1,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, 1fr)',
+        gap: 8,
+        flex: '0 0 auto',
+    },
+    metricCard: {
+        background: 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)',
+        border: '2px solid rgba(16,185,129,0.15)',
+        borderRadius: 12,
+        padding: '16px 14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+        transition: 'all 0.3s ease',
+    },
+    metricTop: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+    },
+    metricIcon: {
+        fontSize: 20,
+        display: 'flex',
+        alignItems: 'center',
+    },
+    metricLabel: {
+        fontSize: 9,
+        fontWeight: 900,
+        color: '#6b7280',
+        letterSpacing: '0.1em',
+    },
+    metricValue: {
+        fontSize: 28,
+        fontWeight: 900,
+        color: '#047857',
+        lineHeight: 1,
+    },
+    metricSub: {
+        fontSize: 9,
+        color: '#9ca3af',
+        fontWeight: 600,
     },
     mainGrid: {
         position: 'relative', zIndex: 1,
         display: 'grid',
         gridTemplateColumns: '1fr 1fr',
-        gap: 20,
+        gap: 12,
         flex: 1,
+        minHeight: 0,
     } as React.CSSProperties,
     leftCol: {
-        display: 'flex', flexDirection: 'column', gap: 16,
+        display: 'flex', flexDirection: 'column', gap: 12,
         gridColumn: '1',
         gridRow: '1 / 3',
+        minHeight: 0,
+        overflow: 'hidden',
     },
     rightCol: {
-        display: 'flex', flexDirection: 'column', gap: 16,
+        display: 'flex', flexDirection: 'column', gap: 12,
         gridColumn: '2',
         gridRow: '1 / 3',
+        minHeight: 0,
+        overflow: 'hidden',
     },
     kpiCard: {
         background: 'linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)',
         border: '2px solid rgba(16,185,129,0.3)',
-        borderRadius: 16,
-        padding: '20px 24px',
+        borderRadius: 12,
+        padding: '16px 18px',
         position: 'relative',
         overflow: 'hidden',
         flex: '0 1 auto',
-        minHeight: '200px',
+        minHeight: 'auto',
         transition: 'all 0.3s ease',
         cursor: 'default',
-        boxShadow: '0 4px 20px rgba(16,185,129,0.08)',
+        boxShadow: '0 4px 12px rgba(16,185,129,0.08)',
     },
     kpiGlow: {
         position: 'absolute', top: -40, right: -40,
@@ -645,25 +900,26 @@ const styles: Record<string, React.CSSProperties> = {
         pointerEvents: 'none',
     },
     kpiLabel: {
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: 900,
-        letterSpacing: '0.2em',
+        letterSpacing: '0.15em',
         color: '#059669',
-        marginBottom: 8,
+        marginBottom: 10,
+        textTransform: 'uppercase',
     },
     kpiValue: {
-        fontSize: 52,
+        fontSize: 56,
         fontWeight: 900,
         lineHeight: 1,
         letterSpacing: '-0.02em',
-        marginBottom: 12,
+        marginBottom: 14,
         color: '#047857',
     },
     kpiUnit: {
-        fontSize: 28,
+        fontSize: 30,
         fontWeight: 700,
-        opacity: 0.7,
-        marginLeft: 4,
+        opacity: 0.75,
+        marginLeft: 6,
         color: '#078d51',
     },
     kpiMeta: {
@@ -672,20 +928,24 @@ const styles: Record<string, React.CSSProperties> = {
         color: '#059669',
         fontWeight: 700,
         letterSpacing: '0.05em',
-        marginBottom: 8,
+        marginBottom: 10,
+        backgroundColor: 'rgba(16,185,129,0.05)',
+        padding: '8px 10px',
+        borderRadius: 6,
     },
     kpiBadge: {
-        fontSize: 14,
+        fontSize: 15,
         fontWeight: 900,
         color: '#059669',
     },
     progressTrack: {
         width: '100%',
-        height: 8,
-        background: 'rgba(16,185,129,0.1)',
+        height: 10,
+        background: 'rgba(16,185,129,0.12)',
         borderRadius: 99,
         overflow: 'hidden',
-        marginBottom: 8,
+        marginBottom: 10,
+        border: '1px solid rgba(16,185,129,0.2)',
     },
     progressBar: {
         height: '100%',
@@ -693,16 +953,23 @@ const styles: Record<string, React.CSSProperties> = {
         transition: 'width 1s ease',
     },
     kpiRemaining: {
-        fontSize: 11,
+        fontSize: 12,
         color: '#d97706',
         fontWeight: 700,
         letterSpacing: '0.05em',
+        backgroundColor: 'rgba(217,119,6,0.05)',
+        padding: '6px 8px',
+        borderRadius: 4,
     },
     kpiAchieved: {
-        fontSize: 11,
-        color: '#22c55e',
+        fontSize: 12,
+        color: '#16a34a',
         fontWeight: 900,
         letterSpacing: '0.1em',
+        backgroundColor: 'rgba(22,163,74,0.1)',
+        padding: '6px 8px',
+        borderRadius: 4,
+        marginTop: 2,
     },
     noGoal: {
         display: 'flex', alignItems: 'center', gap: 6,
@@ -713,18 +980,19 @@ const styles: Record<string, React.CSSProperties> = {
     miniGrid: {
         display: 'grid', 
         gridTemplateColumns: 'repeat(3, 1fr)', 
-        gap: 12,
+        gap: 10,
         width: '100%',
+        flex: '0 0 auto',
     },
     miniCard: {
         background: '#ffffff',
         border: '2px solid rgba(16,185,129,0.2)',
-        borderRadius: 12,
-        padding: '16px 14px',
+        borderRadius: 10,
+        padding: '12px 10px',
         textAlign: 'center',
         transition: 'all 0.3s ease',
         cursor: 'default',
-        boxShadow: '0 2px 8px rgba(16,185,129,0.06)',
+        boxShadow: '0 2px 6px rgba(16,185,129,0.06)',
     },
     miniLabel: {
         fontSize: 9,
@@ -732,9 +1000,10 @@ const styles: Record<string, React.CSSProperties> = {
         color: '#059669',
         letterSpacing: '0.15em',
         marginBottom: 6,
+        textTransform: 'uppercase',
     },
     miniValue: {
-        fontSize: 24,
+        fontSize: 26,
         fontWeight: 900,
         color: '#047857',
         letterSpacing: '-0.02em',
@@ -750,36 +1019,39 @@ const styles: Record<string, React.CSSProperties> = {
     chartCard: {
         background: 'linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)',
         border: '2px solid rgba(16,185,129,0.3)',
-        borderRadius: 16,
-        padding: '18px 22px',
-        flex: '0 1 auto',
-        minHeight: '240px',
+        borderRadius: 12,
+        padding: '14px 16px',
+        flex: 1,
+        minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
         transition: 'all 0.3s ease',
-        boxShadow: '0 4px 20px rgba(16,185,129,0.08)',
+        boxShadow: '0 4px 12px rgba(16,185,129,0.08)',
     },
     chartTitle: {
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: 900,
-        letterSpacing: '0.2em',
+        letterSpacing: '0.12em',
         color: '#059669',
-        marginBottom: 12,
+        marginBottom: 8,
+        textTransform: 'uppercase',
+        flex: '0 0 auto',
     },
     notesCard: {
-        background: 'linear-gradient(135deg, #ffffff 0%, #f0fdf4 100%)',
-        border: '2px solid rgba(16,185,129,0.3)',
+        background: 'linear-gradient(135deg, #fef3c7 0%, #fef08a 100%)',
+        border: '2px solid rgba(251,146,60,0.3)',
         borderRadius: 16,
-        padding: '16px 22px',
+        padding: '18px 24px',
         gridColumn: '1 / -1',
         marginTop: 4,
-        boxShadow: '0 4px 20px rgba(16,185,129,0.08)',
+        boxShadow: '0 8px 24px rgba(251,146,60,0.1)',
     },
     notesText: {
         fontSize: 14,
-        color: '#047857',
-        fontWeight: 500,
+        color: '#92400e',
+        fontWeight: 600,
         lineHeight: 1.6,
+        letterSpacing: '0.3px',
     },
     loadingScreen: {
         minHeight: '100vh',
@@ -805,22 +1077,25 @@ const styles: Record<string, React.CSSProperties> = {
     },
     staticCard: {
         background: '#ffffff',
-        border: '2px solid rgba(16,185,129,0.3)',
-        borderRadius: 12,
-        padding: '16px',
+        border: '2px solid rgba(16,185,129,0.25)',
+        borderRadius: 10,
+        padding: '12px 12px',
         display: 'flex',
         alignItems: 'center',
-        gap: 12,
-        boxShadow: '0 2px 8px rgba(16,185,129,0.06)',
+        gap: 10,
+        boxShadow: '0 2px 6px rgba(16,185,129,0.06)',
+        transition: 'all 0.3s ease',
+        flex: '0 0 auto',
     },
     staticLabel: {
         fontSize: 10,
         fontWeight: 900,
         color: '#059669',
         letterSpacing: '0.1em',
+        textTransform: 'uppercase',
     },
     staticValue: {
-        fontSize: 20,
+        fontSize: 22,
         fontWeight: 900,
         color: '#047857',
     },

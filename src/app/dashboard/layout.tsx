@@ -53,7 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const producaoSubItems = [
     { label: 'Fila de Produção', icon: Package, path: '/dashboard/producao' },
-    { label: 'Estoque', icon: Truck, path: '/dashboard/logistica/estoque' },
+    // { label: 'Estoque', icon: Truck, path: '/dashboard/logistica/estoque' },
     { label: 'Carregamento', icon: BoxesIcon, path: '/dashboard/producao/carregamento' },
   ];
 
@@ -74,14 +74,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <SidebarProvider>
         <Sidebar collapsible="icon" className="no-print bg-white [&>*]:bg-white">
 
-          <SidebarHeader className="h-20 flex items-center px-4">
-            <SidebarHeader className="h-20 flex items-center px-4">
-              <Link href="/dashboard" className="flex items-center gap-3 group">
-                <div className="w-48 h-14 relative overflow-hidden rounded-xl bg-white shadow-lg border-2 border-primary/20">
-                  <Image src="/logo.png" alt="Logo Novo Ciclo" fill className="object-contain p-1.5" />
-                </div>
-              </Link>
-            </SidebarHeader>
+          <SidebarHeader className="h-20 flex items-center justify-center px-4">
+            <Link href="/dashboard" className="flex items-center gap-3 group w-full">
+              <div className="w-48 h-14 relative overflow-hidden rounded-xl bg-white shadow-lg border-2 border-primary/20 group-data-[collapsible=icon]:w-12 group-data-[collapsible=icon]:h-12 transition-all duration-300">
+                <Image src="/logo.png" alt="Logo Novo Ciclo" fill className="object-contain p-1.5" />
+              </div>
+            </Link>
           </SidebarHeader>
 
           <SidebarContent>

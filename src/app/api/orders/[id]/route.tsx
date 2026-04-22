@@ -51,6 +51,7 @@ export async function PATCH(_request: NextRequest, context: { params: Promise<{ 
     if (data.observations !== undefined) payload.observations = data.observations;
     if (data.assignedVehicleId !== undefined) payload.assignedVehicleId = data.assignedVehicleId;
     if (data.assignedDriverId !== undefined) payload.assignedDriverId = data.assignedDriverId;
+    if (data.acceptedAt !== undefined) payload.acceptedAt = data.acceptedAt ? new Date(data.acceptedAt) : null;
     if (data.deliveryDate !== undefined) payload.deliveryDate = data.deliveryDate ? new Date(data.deliveryDate) : null;
     if (data.scheduledDeliveryDate !== undefined) payload.scheduledDeliveryDate = data.scheduledDeliveryDate ? new Date(data.scheduledDeliveryDate) : null;
     if (data.departureTime !== undefined) payload.departureTime = data.departureTime ? new Date(data.departureTime) : null;
@@ -79,6 +80,52 @@ export async function PATCH(_request: NextRequest, context: { params: Promise<{ 
       data: payload,
       include: { items: true, customer: true },
     });
+
+    // Baixa automática de estoque quando passa para PRODUCAO
+    if (data.status === 'PRODUCAO') {
+      const warnings: string[] = [];
+
+      for (const item of updated.items) {
+        const movements = await prisma.stockMovement.findMany({
+          where: { productId: item.productId },
+        });
+
+        const saldo = movements.reduce((acc: number, m: { type: string; quantity: number; }) =>
+          m.type === 'ENTRADA' ? acc + m.quantity : acc - m.quantity, 0
+        );
+
+        if (saldo < item.quantity) {
+          warnings.push(`Produto ${item.productId}: saldo ${saldo}, necessário ${item.quantity}`);
+        }
+
+        const entradas = movements.filter((m: { type: string; }) => m.type === 'ENTRADA');
+        const avgCost = entradas.length > 0
+          ? entradas.reduce((acc: any, m: { unitCost: any; }) => acc + m.unitCost, 0) / entradas.length
+          : 0;
+
+        const existingSaida = await prisma.stockMovement.findFirst({
+          where: { relatedOrderId: id, productId: item.productId, type: 'SAIDA' },
+        });
+
+        if (!existingSaida) {
+          await prisma.stockMovement.create({
+            data: {
+              productId: item.productId,
+              type: 'SAIDA',
+              quantity: item.quantity,
+              unitCost: avgCost,
+              totalCost: avgCost * item.quantity,
+              reason: `Pedido ${id}`,
+              relatedOrderId: id,
+            },
+          });
+        }
+      }
+
+      if (warnings.length > 0) {
+        return NextResponse.json({ ...updated, stockWarnings: warnings });
+      }
+    }
 
     return NextResponse.json(updated);
   } catch (err) {

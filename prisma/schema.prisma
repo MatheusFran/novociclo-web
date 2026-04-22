@@ -25,6 +25,7 @@ model Product {
   updatedAt     DateTime        @updatedAt
   orderItems    OrderItem[]
   priceItems    PriceTableItem[]
+  stockMovements StockMovement[]
 }
 
 model PriceTable {
@@ -78,10 +79,13 @@ model Order {
   totalValue       Float            @default(0)
   totalWeight      Float            @default(0)
   observations     String?
+  stockMovements StockMovement[]
+
 
   // Logística
   assignedVehicleId     String?
   assignedDriverId      String?
+  acceptedAt            DateTime?
   scheduledDeliveryDate DateTime?
   departureTime         DateTime?
   deliveryDate          DateTime?
@@ -105,6 +109,7 @@ model Order {
   items      OrderItem[]
   priceTable PriceTable?  @relation(fields: [priceTableId], references: [id])
   customer   Customer     @relation(fields: [customerId], references: [id])
+  
 }
 
 model User {
@@ -176,6 +181,25 @@ model SalesGoal {
   @@unique([year, month])
 }
 
+model StockMovement {
+  id             String   @id @default(cuid())
+  productId      String
+  type           StockMovementType
+  quantity       Float
+  unitCost       Float    @default(0)
+  totalCost      Float    @default(0)
+  reason         String
+  relatedOrderId String?
+  createdAt      DateTime @default(now())
+
+  product        Product  @relation(fields: [productId], references: [id])
+  order          Order?   @relation(fields: [relatedOrderId], references: [id])
+}
+
+enum StockMovementType {
+  ENTRADA
+  SAIDA
+}
 
 enum Role {
   ADMIN
@@ -192,6 +216,7 @@ enum OrderStatus {
   AGUARDANDO_FATURAMENTO
   FATURADO
   REJEITADO
+  ENTREGUE
 }
 
 enum ProductionStage {

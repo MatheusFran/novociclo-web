@@ -50,7 +50,7 @@ function DashboardContent() {
   }
 
   // Métricas principais
-  const totalVendas = orders.filter(o => o.status === 'FATURADO').reduce((acc, o) => acc + o.totalValue, 0);
+  const totalVendas = orders.filter(o => o.status === 'ENTREGUE').reduce((acc, o) => acc + o.totalValue, 0);
   const totalPendente = orders.filter(o => o.status === 'PENDENTE').reduce((acc, o) => acc + o.totalValue, 0);
   const totalEmRota = orders.filter(o => o.status === 'ENTREGA').reduce((acc, o) => acc + o.totalValue, 0);
   const totalSacosExpedicao = orders.filter(o => o.status === 'PRONTO_LOGISTICA').reduce((acc, o) => acc + o.items.reduce((s, i) => s + i.quantity, 0), 0);
@@ -64,7 +64,7 @@ function DashboardContent() {
   }));
 
   // Top cidades (por valor de pedidos ativos)
-  const activeOrders = orders.filter(o => !['FATURADO', 'REJEITADO'].includes(o.status));
+  const activeOrders = orders.filter(o => !['REJEITADO', 'ENTREGUE'].includes(o.status));
   const cidadeMap: Record<string, { count: number; value: number; peso: number }> = {};
   activeOrders.forEach(o => {
     const c = o.city || 'Sem Cidade';
@@ -123,7 +123,7 @@ function DashboardContent() {
           <CardContent className="p-3 sm:p-4">
             <p className="text-[8px] sm:text-[9px] font-black uppercase text-muted-foreground mb-2">Faturado</p>
             <p className="text-lg sm:text-2xl font-black text-green-600">R$ {(totalVendas / 1000).toFixed(0)}k</p>
-            <p className="text-[8px] text-muted-foreground mt-1">{orders.filter(o => o.status === 'FATURADO').length} ped</p>
+            <p className="text-[8px] text-muted-foreground mt-1">{orders.filter(o => o.status === 'ENTREGUE').length} ped</p>
           </CardContent>
         </Card>
         <Card className="border-none shadow-sm">

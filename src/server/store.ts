@@ -4,6 +4,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { Order, Product, OrderStatus, ProductionStage, Vehicle, Driver, Member, Activity, Customer, PriceTable, DeliverySchedule, SalesGoal } from '../lib/types';
 import { add } from 'date-fns';
 
+// interface StockMovement {
+//   id: string;
+//   productId: string;
+//   type: 'ENTRADA' | 'SAIDA';
+//   quantity: number;
+//   unitCost: number;
+//   totalCost: number;
+//   reason: string;
+//   relatedOrderId?: string;
+//   createdAt: string;
+// }
+
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const method = options?.method ?? 'GET';
   let res: Response;
@@ -55,6 +67,7 @@ export function useSystemData() {
   const [priceTables, setPriceTables] = useState<PriceTable[]>([]);
   const [deliverySchedules, setDeliverySchedules] = useState<DeliverySchedule[]>([]);
   const [salesGoals, setSalesGoals] = useState<SalesGoal[]>([]);
+  // const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
   const [isReady, setIsReady] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +84,7 @@ export function useSystemData() {
       api<PriceTable[]>('/api/price-tables'),
       api<DeliverySchedule[]>('/api/delivery-schedules'),
       api<SalesGoal[]>('/api/sales-goals'),
+      // api<StockMovement[]>('/api/stock-movements'),
     ]).then((results) => {
       const getValue = <T,>(result: PromiseSettledResult<T>, fallback: T) => result.status === 'fulfilled' ? result.value : fallback;
       const [ordersResult, productsResult, vehiclesResult, driversResult, membersResult, customersResult, activitiesResult, priceTablesResult, deliverySchedulesResult, salesGoalsResult] = results;
@@ -85,6 +99,7 @@ export function useSystemData() {
       setPriceTables(getValue<PriceTable[]>(priceTablesResult, []));
       setDeliverySchedules(getValue<DeliverySchedule[]>(deliverySchedulesResult, []));
       setSalesGoals(getValue<SalesGoal[]>(salesGoalsResult, []));
+      // setStockMovements(getValue<StockMovement[]>(stockMovementsResult, []));
 
       const rejected = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
       if (rejected.length > 0) {
@@ -103,7 +118,7 @@ export function useSystemData() {
   }, []);
 
   const updateOrderStatus = useCallback(async (id: string, status: OrderStatus, extra?: Partial<Order>) => {
-    const updated = await api<Order>(`/api/orders/${id}`, {
+    const updated = await api<Order & { stockWarnings?: string[] }>(`/api/orders/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ status, ...extra }),
     });
@@ -206,7 +221,7 @@ export function useSystemData() {
     const order = orders.find(o => o.id === orderId);
     const updated = await api<Order>(`/api/orders/${orderId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ status: 'FATURADO', deliveredAt: new Date().toISOString() }),
+      body: JSON.stringify({ status: 'ENTREGUE', deliveredAt: new Date().toISOString() }),
     });
     setOrders(prev => prev.map(o => o.id === orderId ? updated : o));
     if (order?.assignedVehicleId) {
@@ -352,7 +367,7 @@ export function useSystemData() {
     if (!schedule) return;
     await updateDeliverySchedule(scheduleId, { status: 'CONCLUIDO' });
     for (const orderId of schedule.orders) {
-      await updateOrderStatus(orderId, 'FATURADO', { deliveredAt: new Date().toISOString() });
+      await updateOrderStatus(orderId, 'ENTREGUE', { deliveredAt: new Date().toISOString() });
     }
     const updatedVehicle = await api<Vehicle>(`/api/vehicles/${schedule.vehicleId}`, { method: 'PATCH', body: JSON.stringify({ status: 'DISPONIVEL' }) });
     const updatedDriver = await api<Driver>(`/api/drivers/${schedule.driverId}`, { method: 'PATCH', body: JSON.stringify({ status: 'DISPONIVEL' }) });
@@ -362,7 +377,7 @@ export function useSystemData() {
 
   return {
     orders, products, vehicles, drivers, customers,
-    activities, priceTables, deliverySchedules, members, salesGoals, isReady, hasError, error,
+    activities, priceTables, deliverySchedules, members, salesGoals, /* stockMovements, */ isReady, hasError, error,
     addOrder, updateOrder, deleteOrder,
     addProduct, updateProduct, deleteProduct,
     addVehicle, updateVehicle, deleteVehicle,
