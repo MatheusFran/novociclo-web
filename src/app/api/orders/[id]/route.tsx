@@ -34,11 +34,11 @@ export async function PATCH(_request: NextRequest, context: { params: Promise<{ 
   try {
     const payload: any = {};
 
-    if (data.name !== undefined) payload.customerName = data.customerName;
-    if (data.email !== undefined) payload.customerEmail = data.customerEmail;
-    if (data.phone !== undefined) payload.customerPhone = data.customerPhone;
-    if (data.address !== undefined) payload.customerAddress = data.customerAddress;
-    if (data.cpfcnpj !== undefined) payload.customerDocument = data.customerDocument;
+    if (data.customerName !== undefined) payload.customerName = data.customerName;
+    if (data.customerEmail !== undefined) payload.customerEmail = data.customerEmail;
+    if (data.customerPhone !== undefined) payload.customerPhone = data.customerPhone;
+    if (data.customerAddress !== undefined) payload.customerAddress = data.customerAddress;
+    if (data.customerDocument !== undefined) payload.customerDocument = data.customerDocument;
     if (data.city !== undefined) payload.city = data.city;
     if (data.status !== undefined) payload.status = data.status;
     if (data.productionStage !== undefined) payload.productionStage = data.productionStage;
@@ -64,6 +64,8 @@ export async function PATCH(_request: NextRequest, context: { params: Promise<{ 
     if (data.grupoCarga !== undefined) payload.grupoCarga = data.grupoCarga;
     if (data.tipoCarga !== undefined) payload.tipoCarga = data.tipoCarga;
     if (data.dataCarregamento !== undefined) payload.dataCarregamento = data.dataCarregamento ? new Date(data.dataCarregamento) : null;
+
+    console.log('BODY:', data);
 
     if (Array.isArray(data.items)) {
       payload.items = {

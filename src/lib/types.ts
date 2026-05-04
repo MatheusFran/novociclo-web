@@ -294,6 +294,21 @@ export interface DeliverySchedule {
   cities: string[];
 }
 
+export interface Carregamento {
+  id: string;
+  grupoCarga: string;
+  tipoCarga: 'BATIDA' | 'PALETIZADA';
+  dataCarregamento: string;
+  vehicleId?: string;
+  scheduledDeliveryDate?: string;
+  orderIds: string[];
+  totalSacos: number;
+  totalPeso: number;
+  totalValor: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SalesGoal {
   id: string;
   month: number;

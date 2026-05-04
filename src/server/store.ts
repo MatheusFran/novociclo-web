@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Order, Product, OrderStatus, ProductionStage, Vehicle, Driver, Member, Activity, Customer, PriceTable, DeliverySchedule, SalesGoal, CrmPipeline } from '../lib/types';
+import { Order, Product, OrderStatus, ProductionStage, Vehicle, Driver, Member, Activity, Customer, PriceTable, DeliverySchedule, SalesGoal, CrmPipeline, Carregamento } from '../lib/types';
 import { add } from 'date-fns';
 
 // interface StockMovement {
@@ -68,6 +68,7 @@ export function useSystemData() {
   const [priceTables, setPriceTables] = useState<PriceTable[]>([]);
   const [deliverySchedules, setDeliverySchedules] = useState<DeliverySchedule[]>([]);
   const [salesGoals, setSalesGoals] = useState<SalesGoal[]>([]);
+  const [carregamentos, setCarregamentos] = useState<Carregamento[]>([]);
   // const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
   const [isReady, setIsReady] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -86,6 +87,7 @@ export function useSystemData() {
       api<DeliverySchedule[]>('/api/delivery-schedules'),
       api<SalesGoal[]>('/api/sales-goals'),
       api<CrmPipeline[]>('/api/crm'),
+      api<Carregamento[]>('/api/carregamentos'),
       // api<StockMovement[]>('/api/stock-movements'),
     ]).then((results) => {
       const getValue = <T,>(result: PromiseSettledResult<T>, fallback: T) => result.status === 'fulfilled' ? result.value : fallback;
@@ -101,6 +103,7 @@ export function useSystemData() {
         deliverySchedulesResult,
         salesGoalsResult,
         crmPipelinesResult,
+        carregamentosResult,
       ] = results;
 
       setOrders(getValue<Order[]>(ordersResult, []));
@@ -114,6 +117,7 @@ export function useSystemData() {
       setDeliverySchedules(getValue<DeliverySchedule[]>(deliverySchedulesResult, []));
       setSalesGoals(getValue<SalesGoal[]>(salesGoalsResult, []));
       setCrmPipelines(getValue<CrmPipeline[]>(crmPipelinesResult, []));
+      setCarregamentos(getValue<Carregamento[]>(carregamentosResult, []));
 
       const rejected = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
       if (rejected.length > 0) {
@@ -160,6 +164,7 @@ export function useSystemData() {
   }, []);
 
   const updateOrderStatus = useCallback(async (id: string, status: OrderStatus, extra?: Partial<Order>) => {
+
     const updated = await api<Order & { stockWarnings?: string[] }>(`/api/orders/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ status, ...extra }),
@@ -417,9 +422,35 @@ export function useSystemData() {
     setDrivers(prev => prev.map(d => d.id === schedule.driverId ? updatedDriver : d));
   }, [deliverySchedules, updateDeliverySchedule, updateOrderStatus]);
 
+  
+  const createCarregamento = useCallback(async (carregamento: Omit<Carregamento, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const created = await api<Carregamento>('/api/carregamentos', {
+      method: 'POST',
+      body: JSON.stringify(carregamento),
+    });
+    setCarregamentos(prev => [created, ...prev]);
+    return created;
+  }, []);
+
+  const updateCarregamento = useCallback(async (id: string, updates: Partial<Carregamento>) => {
+    const updated = await api<Carregamento>(`/api/carregamentos/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+    setCarregamentos(prev => prev.map(c => c.id === id ? updated : c));
+    return updated;
+  }, []);
+
+  const deleteCarregamento = useCallback(async (id: string) => {
+    await api(`/api/carregamentos/${id}`, {
+      method: 'DELETE',
+    });
+    setCarregamentos(prev => prev.filter(c => c.id !== id));
+  }, []);
+
   return {
     orders, products, vehicles, drivers, customers,
-    activities, priceTables, deliverySchedules, members, salesGoals, /* stockMovements, */ isReady, hasError, error,
+    activities, priceTables, deliverySchedules, members, salesGoals, carregamentos, /* stockMovements, */ isReady, hasError, error,
     addOrder, updateOrder, deleteOrder,
     addProduct, updateProduct, deleteProduct,
     addVehicle, updateVehicle, deleteVehicle,
@@ -435,5 +466,6 @@ export function useSystemData() {
     addCrmPipeline,
     updateCrmPipeline,
     deleteCrmPipeline,
-  };
+    createCarregamento, updateCarregamento, deleteCarregamento
+  }
 }

@@ -84,19 +84,7 @@ interface LoadingCharge {
   observations: string;
 }
 
-// ─────────────────────────────────────────────
-// STORAGE
-// ─────────────────────────────────────────────
-const STORAGE_KEY = 'novociclo_loading_charges_v3';
 
-function loadFromStorage(): LoadingCharge[] {
-  if (typeof window === 'undefined') return [];
-  try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : []; }
-  catch { return []; }
-}
-function saveToStorage(charges: LoadingCharge[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(charges)); } catch { }
-}
 
 // ─────────────────────────────────────────────
 // HELPERS
@@ -119,9 +107,6 @@ function paletUnits(palet: Palet) {
   return palet.items.reduce((s, item) => s + item.clients.reduce((ss, c) => ss + c.quantity, 0), 0);
 }
 function newPaletId() { return `p_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`; }
-function buildChargeNumber(n: number) {
-  return `CRG-${format(new Date(), 'ddMMyy')}-${String(n + 1).padStart(3, '0')}`;
-}
 
 // ─────────────────────────────────────────────
 // PALET EDITOR
@@ -286,9 +271,8 @@ function PaletEditor({ palet, availableItems, products, onUpdate, onDelete, city
 type Step = 'list' | 'mount';
 
 export default function CarregamentoPage() {
-  const { orders, products, vehicles, isReady } = useSystemData();
+  const { orders, products, vehicles, isReady, carregamentos, createCarregamento } = useSystemData();
 
-  const [charges, setCharges] = useState<LoadingCharge[]>([]);
   const [step, setStep] = useState<Step>('list');
   const [activeGrupo, setActiveGrupo] = useState<string | null>(null);
   const [expandedCharge, setExpandedCharge] = useState<string | null>(null);
@@ -308,7 +292,29 @@ export default function CarregamentoPage() {
   // Modal detalhes
   const [detalhesOrder, setDetalhesOrder] = useState<any>(null);
 
-  useEffect(() => { setCharges(loadFromStorage()); }, []);
+  // Usar carregamentos direto do store
+  const charges = useMemo(() => {
+    if (!carregamentos || carregamentos.length === 0) return [];
+    
+    return carregamentos.map(c => ({
+      id: c.id,
+      chargeNumber: `CRG-${format(new Date(c.createdAt), 'ddMMyy')}-${String(Math.abs(c.id.charCodeAt(0) % 1000)).padStart(3, '0')}`,
+      grupoCarga: c.grupoCarga,
+      cityGroups: [] as CityGroup[],
+      routes: c.orderIds.map((orderId, idx) => ({
+        id: `route_${orderId}_${idx}`,
+        destination: '—',
+        orders: [orderId],
+        totalWeightKg: c.totalPeso,
+        totalUnits: Math.round(c.totalSacos),
+      })),
+      totalWeightKg: c.totalPeso,
+      totalPalets: 0,
+      totalRoutes: c.orderIds.length,
+      createdAt: c.createdAt,
+      observations: '',
+    })) as LoadingCharge[];
+  }, [carregamentos]);
 
   // ── Pedidos disponíveis (AGUARDANDO_FATURAMENTO não alocados)
   const allocatedIds = useMemo(() => {
@@ -348,25 +354,21 @@ export default function CarregamentoPage() {
     });
   }, [grupoMap, pendSearch, pendCidade]);
 
-  const historicoGrupos = useMemo(() => {
-    const map: Record<string, typeof orders[0][]> = {};
-    orders
-      .filter(o => ['FATURADO', 'ENTREGA', 'ENTREGUE'].includes(o.status) && (o as any).grupoCarga)
-      .forEach(o => {
-        const g = (o as any).grupoCarga;
-        if (!map[g]) map[g] = [];
-        map[g].push(o);
-      });
-    return map;
-  }, [orders]);
+  const historicoChargesFiltered = useMemo(() =>
+    charges.filter(charge => {
+      const matchSearch =
+        !histSearch ||
+        charge.chargeNumber.toLowerCase().includes(histSearch.toLowerCase()) ||
+        charge.grupoCarga.toLowerCase().includes(histSearch.toLowerCase());
 
-  const historicoFiltered = useMemo(() =>
-    Object.entries(historicoGrupos).filter(([grupo]) => {
-      const matchSearch = !histSearch || grupo.toLowerCase().includes(histSearch.toLowerCase());
-      const matchDe = !histDe || historicoGrupos[grupo].some(o => new Date(o.updatedAt) >= new Date(histDe));
-      const matchAte = !histAte || historicoGrupos[grupo].some(o => new Date(o.updatedAt) <= new Date(histAte + 'T23:59:59'));
+      const matchDe =
+        !histDe || new Date(charge.createdAt) >= new Date(histDe);
+
+      const matchAte =
+        !histAte || new Date(charge.createdAt) <= new Date(histAte + 'T23:59:59');
+
       return matchSearch && matchDe && matchAte;
-    }), [historicoGrupos, histSearch, histDe, histAte]);
+    }), [charges, histSearch, histDe, histAte]);
 
   // ── Pedidos do grupo ativo separados por tipo
   const activeOrders = useMemo(() =>
@@ -440,7 +442,7 @@ export default function CarregamentoPage() {
     setIsConfirmOpen(true);
   };
 
-  const confirmSave = () => {
+  const confirmSave = async () => {
     const allPalets = Object.values(cityPalets).flat();
     const paletWeight_total = allPalets.reduce((s, p) => s + paletWeight(p, products), 0);
     const batidaWeight_total = batidaOrders.reduce((s, o) => s + (o.totalWeight || 0), 0);
@@ -459,27 +461,33 @@ export default function CarregamentoPage() {
       totalUnits: (order.items as any[]).reduce((s: number, i: any) => s + i.quantity, 0),
     }));
 
-    const charge: LoadingCharge = {
-      id: `chg_${Date.now()}`,
-      chargeNumber: buildChargeNumber(charges.length),
-      grupoCarga: activeGrupo!,
-      cityGroups,
-      routes,
-      totalWeightKg: paletWeight_total + batidaWeight_total,
-      totalPalets: allPalets.length,
-      totalRoutes: routes.length,
-      createdAt: new Date().toISOString(),
-      observations,
-    };
+    // Salvar na API
+    try {
+      const allOrderIds = [...cityGroups.flatMap(cg => cg.orders), ...routes.flatMap(r => r.orders)];
+      const totalSacos = activeOrders.reduce((s, o) => s + (o.items as any[]).reduce((ss: number, i: any) => ss + i.quantity, 0), 0);
+      const totalValor = activeOrders.reduce((s, o) => s + (o.totalValue || 0), 0);
 
-    const updated = [charge, ...charges];
-    setCharges(updated);
-    saveToStorage(updated);
-    toast({ title: 'Carga fechada!', description: `${charge.chargeNumber} · ${activeGrupo}` });
-    setStep('list');
-    setActiveGrupo(null);
-    setCityPalets({});
-    setIsConfirmOpen(false);
+      await createCarregamento({
+        grupoCarga: activeGrupo!,
+        tipoCarga: paletizadoOrders.length > 0 ? 'PALETIZADA' : 'BATIDA',
+        dataCarregamento: (activeOrders[0] as any)?.dataCarregamento || new Date().toISOString(),
+        vehicleId: (activeOrders[0] as any)?.assignedVehicleId || undefined,
+        scheduledDeliveryDate: (activeOrders[0] as any)?.scheduledDeliveryDate || undefined,
+        orderIds: allOrderIds,
+        totalSacos,
+        totalPeso: paletWeight_total + batidaWeight_total,
+        totalValor,
+      });
+
+      toast({ title: 'Carga fechada!', description: `${activeGrupo}` });
+      setStep('list');
+      setActiveGrupo(null);
+      setCityPalets({});
+      setIsConfirmOpen(false);
+    } catch (error) {
+      console.error('Erro ao salvar carregamento:', error);
+      toast({ variant: 'destructive', title: 'Erro', description: 'Falha ao salvar carregamento' });
+    }
   };
 
   const handleExport = (charge: LoadingCharge) => {
@@ -898,7 +906,7 @@ export default function CarregamentoPage() {
               <h2 className="text-lg font-black uppercase tracking-tight">Histórico de Cargas</h2>
               <p className="text-[10px] font-bold uppercase text-muted-foreground">Cargas já fechadas</p>
             </div>
-            <span className="text-[9px] font-bold text-muted-foreground uppercase">{historicoFiltered.length} cargas</span>
+            <span className="text-[9px] font-bold text-muted-foreground uppercase">{historicoChargesFiltered.length} cargas</span>
           </div>
 
           <FilterPanel
@@ -911,98 +919,113 @@ export default function CarregamentoPage() {
             gridCols="grid-cols-1 sm:grid-cols-2 md:grid-cols-4"
           />
 
-          {historicoFiltered.length === 0 ? (
+          {historicoChargesFiltered.length === 0 ? (
             <Card className="border-none shadow-sm">
               <CardContent className="py-16 text-center text-muted-foreground italic text-xs uppercase opacity-40">Nenhuma carga encontrada.</CardContent>
             </Card>
           ) : (
             <div className="space-y-3">
-              {charges.map(charge => (
-                <Collapsible key={charge.id} open={expandedCharge === charge.id} onOpenChange={() => setExpandedCharge(expandedCharge === charge.id ? null : charge.id)}>
-                  <Card className="border-none shadow-sm overflow-hidden">
-                    <CollapsibleTrigger asChild>
-                      <CardContent className="p-4 cursor-pointer hover:bg-muted/20 transition-colors">
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center">
-                              <Truck className="w-4 h-4 text-primary" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-black text-primary">{charge.chargeNumber}</p>
-                              <p className="text-[9px] text-muted-foreground font-mono">{charge.grupoCarga} · {charge.totalPalets} paletes · {charge.totalRoutes} rotas · {charge.totalWeightKg.toFixed(1)} kg</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[9px] text-muted-foreground">{fmtDate(charge.createdAt, true)}</span>
-                            {expandedCharge === charge.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <CardContent className="px-4 pb-4 pt-0 border-t space-y-3">
-                        {charge.observations && <p className="text-[10px] text-muted-foreground bg-muted/30 rounded p-2">{charge.observations}</p>}
+              {charges
+                .filter(charge => {
+                  const matchSearch =
+                    !histSearch ||
+                    charge.chargeNumber.toLowerCase().includes(histSearch.toLowerCase()) ||
+                    charge.grupoCarga.toLowerCase().includes(histSearch.toLowerCase());
 
-                        {/* Paletes */}
-                        {charge.cityGroups?.length > 0 && (
-                          <div className="space-y-2">
-                            <p className="text-[10px] font-black uppercase text-blue-700 flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> Paletizados</p>
-                            {charge.cityGroups.map((cg, i) => (
-                              <div key={i}>
-                                <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">📍 {cg.city}</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                  {cg.palets.map(p => {
-                                    const clients = [...new Set(p.items.flatMap(i => i.clients.map(c => c.customerName)))].join(', ');
-                                    return (
-                                      <div key={p.id} className="border border-blue-200 rounded-lg p-2 bg-blue-50/30">
-                                        <div className="flex justify-between mb-1">
-                                          <p className="text-[10px] font-black text-blue-700">Palete {String(p.number).padStart(3, '0')}</p>
-                                          <p className="text-[9px] text-muted-foreground">{paletUnits(p)} un · {paletWeight(p, products).toFixed(1)} kg</p>
-                                        </div>
-                                        <p className="text-[8px] text-muted-foreground">{clients}</p>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
+                  const matchDe =
+                    !histDe || new Date(charge.createdAt) >= new Date(histDe);
+
+                  const matchAte =
+                    !histAte || new Date(charge.createdAt) <= new Date(histAte + 'T23:59:59');
+
+                  return matchSearch && matchDe && matchAte;
+                })
+                .map(charge => (
+                  <Collapsible key={charge.id} open={expandedCharge === charge.id} onOpenChange={() => setExpandedCharge(expandedCharge === charge.id ? null : charge.id)}>
+                    <Card className="border-none shadow-sm overflow-hidden">
+                      <CollapsibleTrigger asChild>
+                        <CardContent className="p-4 cursor-pointer hover:bg-muted/20 transition-colors">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center">
+                                <Truck className="w-4 h-4 text-primary" />
                               </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Rotas */}
-                        {charge?.routes?.length > 0 && (
-                          <div className="space-y-2">
-                            <p className="text-[10px] font-black uppercase text-amber-700 flex items-center gap-1"><Home className="w-3.5 h-3.5" /> Batida</p>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                              {charge.routes.map((route, idx) => {
-                                const o = orders.find(o => o.id === route.orders[0]);
-                                return (
-                                  <div key={route.id} className="border border-amber-200 rounded-lg p-2 bg-amber-50/30">
-                                    <div className="flex justify-between">
-                                      <p className="text-[10px] font-black text-amber-700">{idx + 1}. {o?.customerName || '—'}</p>
-                                      <p className="text-[9px] text-muted-foreground">{route.totalUnits} un · {route.totalWeightKg.toFixed(1)} kg</p>
-                                    </div>
-                                    <p className="text-[8px] text-muted-foreground">📍 {route.destination}</p>
-                                  </div>
-                                );
-                              })}
+                              <div>
+                                <p className="text-sm font-black text-primary">{charge.chargeNumber}</p>
+                                <p className="text-[9px] text-muted-foreground font-mono">{charge.grupoCarga} · {charge.totalPalets} paletes · {charge.totalRoutes} rotas · {charge.totalWeightKg.toFixed(1)} kg</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] text-muted-foreground">{fmtDate(charge.createdAt, true)}</span>
+                              {expandedCharge === charge.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                             </div>
                           </div>
-                        )}
+                        </CardContent>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <CardContent className="px-4 pb-4 pt-0 border-t space-y-3">
+                          {charge.observations && <p className="text-[10px] text-muted-foreground bg-muted/30 rounded p-2">{charge.observations}</p>}
 
-                        <div className="flex gap-2 pt-2 border-t">
-                          <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold flex-1" onClick={() => printRomaneio(charge)}>
-                            <Printer className="w-3.5 h-3.5" /> Romaneio
-                          </Button>
-                          <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold flex-1" onClick={() => handleExport(charge)}>
-                            <Download className="w-3.5 h-3.5" /> Exportar
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </CollapsibleContent>
-                  </Card>
-                </Collapsible>
-              ))}
+                          {/* Paletes */}
+                          {charge.cityGroups?.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-black uppercase text-blue-700 flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> Paletizados</p>
+                              {charge.cityGroups.map((cg, i) => (
+                                <div key={i}>
+                                  <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">📍 {cg.city}</p>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    {cg.palets.map(p => {
+                                      const clients = [...new Set(p.items.flatMap(i => i.clients.map(c => c.customerName)))].join(', ');
+                                      return (
+                                        <div key={p.id} className="border border-blue-200 rounded-lg p-2 bg-blue-50/30">
+                                          <div className="flex justify-between mb-1">
+                                            <p className="text-[10px] font-black text-blue-700">Palete {String(p.number).padStart(3, '0')}</p>
+                                            <p className="text-[9px] text-muted-foreground">{paletUnits(p)} un · {paletWeight(p, products).toFixed(1)} kg</p>
+                                          </div>
+                                          <p className="text-[8px] text-muted-foreground">{clients}</p>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Rotas */}
+                          {charge?.routes?.length > 0 && (
+                            <div className="space-y-2">
+                              <p className="text-[10px] font-black uppercase text-amber-700 flex items-center gap-1"><Home className="w-3.5 h-3.5" /> Batida</p>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {charge.routes.map((route, idx) => {
+                                  const o = orders.find(o => o.id === route.orders[0]);
+                                  return (
+                                    <div key={route.id} className="border border-amber-200 rounded-lg p-2 bg-amber-50/30">
+                                      <div className="flex justify-between">
+                                        <p className="text-[10px] font-black text-amber-700">{idx + 1}. {o?.customerName || '—'}</p>
+                                        <p className="text-[9px] text-muted-foreground">{route.totalUnits} un · {route.totalWeightKg.toFixed(1)} kg</p>
+                                      </div>
+                                      <p className="text-[8px] text-muted-foreground">📍 {route.destination}</p>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex gap-2 pt-2 border-t">
+                            <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold flex-1" onClick={() => printRomaneio(charge)}>
+                              <Printer className="w-3.5 h-3.5" /> Romaneio
+                            </Button>
+                            <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold flex-1" onClick={() => handleExport(charge)}>
+                              <Download className="w-3.5 h-3.5" /> Exportar
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </CollapsibleContent>
+                    </Card>
+                  </Collapsible>
+                ))}
             </div>
           )}
         </TabsContent>

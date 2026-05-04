@@ -217,15 +217,11 @@ export default function OrderDetailsPage() {
                             )}
                         </div>
 
-                        {/* Produção */}
                         <div>
-                            <SectionTitle>Produção</SectionTitle>
+                            <SectionTitle>Carregamento</SectionTitle>
                             <div className="grid grid-cols-2 gap-4">
-                                <InfoField label="Estágio" value={order.productionStage ? (STAGE_MAP[order.productionStage] ?? order.productionStage) : null} />
-                                <InfoField label="Lote" value={order.loteId} />
-                                <InfoField label="Data do Lote" value={fmt(order.loteDate)} />
-                                <InfoField label="Aprovado em" value={fmtDateTime(order.approvedAt)} />
-                                <InfoField label="Visualizado em" value={fmtDateTime(order.viewedAt)} />
+                                <InfoField label="Tipo de carga" value={order.tipoCarga} />
+                                <InfoField label="Grupo de carga" value={order.grupoCarga} />
                             </div>
                         </div>
 
@@ -354,6 +350,7 @@ export default function OrderDetailsPage() {
                                         </div>
                                     ))}
                             </div>
+
                         </div>
                     </div>
                 </div>

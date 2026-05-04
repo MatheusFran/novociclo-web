@@ -220,6 +220,21 @@ model DeliverySchedule {
   updatedAt     DateTime @updatedAt
 }
 
+model Carregamento {
+  id                    String   @id @default(cuid())
+  grupoCarga            String   @unique
+  tipoCarga             String   // BATIDA | PALETIZADA
+  dataCarregamento      DateTime
+  vehicleId             String?
+  scheduledDeliveryDate DateTime?
+  orderIds              Json     // Array de IDs de pedidos
+  totalSacos            Float    @default(0)
+  totalPeso             Float    @default(0)
+  totalValor            Float    @default(0)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
 model SalesGoal {
   id        String   @id @default(cuid())
   month     Int      @default(1)
