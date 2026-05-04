@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Order, Product, OrderStatus, ProductionStage, Vehicle, Driver, Member, Activity, Customer, PriceTable, DeliverySchedule, SalesGoal } from '../lib/types';
+import { Order, Product, OrderStatus, ProductionStage, Vehicle, Driver, Member, Activity, Customer, PriceTable, DeliverySchedule, SalesGoal, CrmPipeline } from '../lib/types';
 import { add } from 'date-fns';
 
 // interface StockMovement {
@@ -39,7 +39,7 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
       payload = { error: text || 'Unknown error' };
     }
     console.error(`[API FETCH] ${method} ${url} - ${res.status} ${res.statusText}`, payload);
-    
+
     // Se houver uma razão específica (ex: dependências), passe-a junto com o status
     const error = new Error(`[API ${method} ${url}] ${res.status} ${res.statusText} - ${payload.reason || (payload.error ?? JSON.stringify(payload))}`);
     (error as any).status = res.status;
@@ -57,6 +57,7 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export function useSystemData() {
+  const [crmPipelines, setCrmPipelines] = useState<any[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -84,10 +85,23 @@ export function useSystemData() {
       api<PriceTable[]>('/api/price-tables'),
       api<DeliverySchedule[]>('/api/delivery-schedules'),
       api<SalesGoal[]>('/api/sales-goals'),
+      api<CrmPipeline[]>('/api/crm'),
       // api<StockMovement[]>('/api/stock-movements'),
     ]).then((results) => {
       const getValue = <T,>(result: PromiseSettledResult<T>, fallback: T) => result.status === 'fulfilled' ? result.value : fallback;
-      const [ordersResult, productsResult, vehiclesResult, driversResult, membersResult, customersResult, activitiesResult, priceTablesResult, deliverySchedulesResult, salesGoalsResult] = results;
+      const [
+        ordersResult,
+        productsResult,
+        vehiclesResult,
+        driversResult,
+        membersResult,
+        customersResult,
+        activitiesResult,
+        priceTablesResult,
+        deliverySchedulesResult,
+        salesGoalsResult,
+        crmPipelinesResult,
+      ] = results;
 
       setOrders(getValue<Order[]>(ordersResult, []));
       setProducts(getValue<Product[]>(productsResult, []));
@@ -99,7 +113,7 @@ export function useSystemData() {
       setPriceTables(getValue<PriceTable[]>(priceTablesResult, []));
       setDeliverySchedules(getValue<DeliverySchedule[]>(deliverySchedulesResult, []));
       setSalesGoals(getValue<SalesGoal[]>(salesGoalsResult, []));
-      // setStockMovements(getValue<StockMovement[]>(stockMovementsResult, []));
+      setCrmPipelines(getValue<CrmPipeline[]>(crmPipelinesResult, []));
 
       const rejected = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
       if (rejected.length > 0) {
@@ -115,6 +129,34 @@ export function useSystemData() {
       setError(fetchError?.toString() ?? 'Erro desconhecido');
       setIsReady(true);
     });
+  }, []);
+
+  const addCrmPipeline = useCallback(async (data: { customerId: string; objetivo: string }) => {
+    const created = await api<any>('/api/crm', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+
+    setCrmPipelines(prev => [created, ...prev]);
+    return created;
+  }, []);
+
+  const updateCrmPipeline = useCallback(async (id: string, updates: any) => {
+    const updated = await api<any>(`/api/crm/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+
+    setCrmPipelines(prev => prev.map(p => p.id === id ? updated : p));
+    return updated;
+  }, []);
+
+  const deleteCrmPipeline = useCallback(async (id: string) => {
+    await api(`/api/crm/${id}`, {
+      method: 'DELETE',
+    });
+
+    setCrmPipelines(prev => prev.filter(p => p.id !== id));
   }, []);
 
   const updateOrderStatus = useCallback(async (id: string, status: OrderStatus, extra?: Partial<Order>) => {
@@ -388,6 +430,10 @@ export function useSystemData() {
     updateOrderStatus, updateProductionStage,
     assignShipment, confirmDelivery,
     createDeliverySchedule, updateDeliverySchedule, deleteDeliverySchedule,
-    startDeliverySchedule, completeDeliverySchedule, addMember, updateMember, deleteMember
+    startDeliverySchedule, completeDeliverySchedule, addMember, updateMember, deleteMember,
+    crmPipelines,
+    addCrmPipeline,
+    updateCrmPipeline,
+    deleteCrmPipeline,
   };
 }

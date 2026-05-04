@@ -40,6 +40,8 @@ export async function PATCH(_request: NextRequest, context: { params: Promise<{ 
     if (data.email !== undefined) updateData.email = data.email ? String(data.email).trim() : null;
     if (data.address !== undefined) updateData.address = data.address ? String(data.address).trim() : null;
     if (data.city !== undefined) updateData.city = data.city ? String(data.city).trim() : null;
+    if (data.status !== undefined) updateData.status = data.status ? String(data.status).trim() : null;
+
 
     const updated = await prisma.customer.update({ where: { id }, data: updateData });
     return NextResponse.json(updated);
@@ -63,7 +65,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
     if (ordersCount > 0) {
       return NextResponse.json(
-        { 
+        {
           error: `Não é possível deletar este cliente`,
           reason: `Existem ${ordersCount} pedido(s) associado(s) a este cliente`,
           relatedCount: ordersCount

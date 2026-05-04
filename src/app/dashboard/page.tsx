@@ -2,7 +2,7 @@
 
 import { useSystemData } from '@/server/store';
 import { useAuth } from '@/hooks/use-auth';
-import { ProtectedRoute } from '@/frontend/protected-route';
+import { ProtectedRoute } from '@/components/settings/protected-route';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

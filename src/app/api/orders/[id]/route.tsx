@@ -61,6 +61,9 @@ export async function PATCH(_request: NextRequest, context: { params: Promise<{ 
     if (data.rejectedAt !== undefined) payload.rejectedAt = data.rejectedAt ? new Date(data.rejectedAt) : null;
     if (data.loteId !== undefined) payload.loteId = data.loteId;
     if (data.loteDate !== undefined) payload.loteDate = data.loteDate ? new Date(data.loteDate) : null;
+    if (data.grupoCarga !== undefined) payload.grupoCarga = data.grupoCarga;
+    if (data.tipoCarga !== undefined) payload.tipoCarga = data.tipoCarga;
+    if (data.dataCarregamento !== undefined) payload.dataCarregamento = data.dataCarregamento ? new Date(data.dataCarregamento) : null;
 
     if (Array.isArray(data.items)) {
       payload.items = {
@@ -82,7 +85,7 @@ export async function PATCH(_request: NextRequest, context: { params: Promise<{ 
     });
 
     // Baixa automática de estoque quando passa para PRODUCAO
-    if (data.status === 'PRODUCAO') {
+    if (data.status === 'PRONTO_LOGISTICA') {
       const warnings: string[] = [];
 
       for (const item of updated.items) {

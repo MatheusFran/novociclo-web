@@ -27,7 +27,7 @@ export type OrderStatus =
   | 'REJEITADO'
   | 'ENTREGUE';
 
-export type ProductionStage = 'FILA' | 'PROCESSO' | 'QUALIDADE' | 'CONCLUIDO';
+export type ProductionStage = 'FILA' | 'CONCLUIDO';
 
 export type MovementType = 'ENTRADA' | 'SAIDA' | 'TRANSFERENCIA';
 export type MovementReason =
@@ -86,6 +86,8 @@ export interface Activity {
 
 export interface Customer {
   id: string;
+
+  // BÁSICO
   name: string;
   cpfcnpj?: string | null;
   IE?: string | null;
@@ -93,8 +95,51 @@ export interface Customer {
   email?: string | null;
   address?: string | null;
   city?: string | null;
+
+  // COMERCIAL
+  tipoCliente?: string | null;
+  segmento?: string | null;
+  origemLead?: string | null;
+  responsavel?: string | null;
+  status?: string | null;
+
+  // FINANCEIRO
+  vendaPrazo?: boolean;
+  prazoPagamentoPadrao?: number | null;
+  risco?: string | null;
+  inadimplente?: boolean;
+  scoreInterno?: number | null;
+
+  // RELACIONAMENTO
+  ultimoContato?: string | null;
+  proximoFollowUp?: string | null;
+  observacoes?: string | null;
+  tags?: string | null;
+
+  // RELAÇÕES
+  crmPipelines?: CrmPipeline[];
+  followUps?: FollowUp[];
+  tasks?: Task[];
+  orders?: Order[];
+
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface FollowUp {
+  id: string;
+  date: string;
+  note?: string | null;
+  createdAt?: string;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: string;
+  dueDate?: string | null;
+  createdAt?: string;
 }
 
 export interface BOMItem {
@@ -161,8 +206,9 @@ export interface SavedQuote {
 
 export interface Order {
   id: string;
-
+  customerId: string;
   customerName: string;
+  customerDocument?: string;
   customerCpfCnpj?: string; // substitui customerDocument
   customerIE?: string;      // novo campo
   customerEmail?: string;
@@ -176,6 +222,7 @@ export interface Order {
   productionStage?: ProductionStage;
 
   createdAt: string;
+  updatedAt: string;
   deliveryDate?: string;
   scheduledDeliveryDate?: string;
 
@@ -196,6 +243,12 @@ export interface Order {
   departureTime?: string;
   deliveredAt?: string;
 
+  // Faturamento
+  invoicedAt?: string;
+  rejectedAt?: string;
+  nfNumero?: string;
+  vendaDiretaNumero?: string;
+
   // Produção
   loteId?: string;
   loteDate?: string;
@@ -204,6 +257,10 @@ export interface Order {
 
   // Observações (alinhado com schema)
   observations?: string;
+
+  grupoCarga?: string;
+  tipoCarga?: string;
+  dataCarregamento?: string;
 }
 
 export interface Vehicle {
@@ -247,7 +304,32 @@ export interface SalesGoal {
   createdAt: string;
   updatedAt: string;
 }
+export type CrmColuna = 'ENTRADA' | 'QUALIFICACAO' | 'PROPOSTA' | 'FECHADO';
 
+export interface CrmMovimento {
+  id: string;
+  pipelineId: string;
+  colunaAnterior: CrmColuna | null;
+  colunaAtual: CrmColuna;
+  createdAt: string;
+}
+
+export interface CrmPipeline {
+  id: string;
+  customerId: string;
+  objetivo: string;
+  coluna: CrmColuna;
+  createdAt: string;
+  updatedAt: string;
+
+  customer?: {
+    id: string;
+    name: string;
+    city?: string;
+  };
+
+  movimentos: CrmMovimento[];
+}
 
 // Lista de cidades para autocomplete
 export const citiesWithStates: { name: string; state: string }[] = [

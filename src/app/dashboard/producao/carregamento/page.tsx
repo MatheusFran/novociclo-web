@@ -1,10 +1,14 @@
-'use client';
+"use client";
 
 import { useSystemData } from '@/server/store';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { OrderDetailsModal } from '@/components/shared/OrderDetailsModal';
+import { FilterPanel } from '@/components/shared/FilterPanel';
+import { SummaryCard } from '@/components/shared/SummaryCard';
 import { format } from 'date-fns';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -19,43 +23,63 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import {
-  MapPin, Package, Truck, Plus, Trash2, Download, CheckCircle2,
-  ChevronDown, ChevronUp, Printer, X, Box, Weight, ArrowLeft,
-  ClipboardList, Layers,
+  MapPin, Truck, Plus, Trash2, Download, CheckCircle2,
+  ChevronDown, ChevronUp, Printer, X, ArrowLeft,
+  ClipboardList, Layers, Package, Eye, Home, Calendar,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
+
+// ─────────────────────────────────────────────
+// CONSTANTES
+// ─────────────────────────────────────────────
+const STATUS_COLORS: Record<string, string> = {
+  AGUARDANDO_FATURAMENTO: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+  FATURADO: 'bg-green-100 text-green-800 border-green-200',
+  ENTREGA: 'bg-purple-100 text-purple-800 border-purple-200',
+  ENTREGUE: 'bg-zinc-100 text-zinc-600 border-zinc-200',
+};
+const STATUS_LABELS: Record<string, string> = {
+  AGUARDANDO_FATURAMENTO: 'Ag. Faturamento',
+  FATURADO: 'Lib. Entrega',
+  ENTREGA: 'Em Entrega',
+  ENTREGUE: 'Entregue',
+};
 
 // ─────────────────────────────────────────────
 // TIPOS
 // ─────────────────────────────────────────────
-
 interface PaletItem {
   productId: string;
-  /** clientes que contribuem com esse produto neste palete */
   clients: { orderId: string; customerName: string; quantity: number }[];
 }
-
 interface Palet {
   id: string;
   number: number;
-  /** itens consolidados (somados por produto) */
   items: PaletItem[];
 }
-
 interface CityGroup {
   city: string;
-  orders: string[]; // orderIds
+  orders: string[];
   palets: Palet[];
 }
-
+interface Route {
+  id: string;
+  destination: string;
+  orders: string[];
+  totalWeightKg: number;
+  totalUnits: number;
+}
 interface LoadingCharge {
   id: string;
   chargeNumber: string;
-  cityGroups: CityGroup[];
+  grupoCarga: string;
+  cityGroups: CityGroup[];   // pedidos PALETIZADO
+  routes: Route[];           // pedidos BATIDA
   totalWeightKg: number;
   totalPalets: number;
+  totalRoutes: number;
   createdAt: string;
   observations: string;
 }
@@ -63,178 +87,119 @@ interface LoadingCharge {
 // ─────────────────────────────────────────────
 // STORAGE
 // ─────────────────────────────────────────────
-
-const STORAGE_KEY = 'novociclo_loading_charges_v2';
+const STORAGE_KEY = 'novociclo_loading_charges_v3';
 
 function loadFromStorage(): LoadingCharge[] {
   if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
+  try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : []; }
+  catch { return []; }
 }
-
 function saveToStorage(charges: LoadingCharge[]) {
-  try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(charges)); } catch { }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(charges)); } catch { }
 }
 
 // ─────────────────────────────────────────────
 // HELPERS
 // ─────────────────────────────────────────────
-
-function productWeight(products: any[], productId: string, qty: number) {
+function fmtDate(date?: string | null, withTime = false) {
+  if (!date) return '—';
+  try { return format(new Date(date), withTime ? 'dd/MM/yy HH:mm' : 'dd/MM/yy'); }
+  catch { return '—'; }
+}
+function prodWeight(products: any[], productId: string, qty: number) {
   return (products.find(p => p.id === productId)?.weight || 0) * qty;
 }
-
-function paletTotalWeight(palet: Palet, products: any[]) {
-  return palet.items.reduce((sum, item) => {
-    const totalQty = item.clients.reduce((s, c) => s + c.quantity, 0);
-    return sum + productWeight(products, item.productId, totalQty);
+function paletWeight(palet: Palet, products: any[]) {
+  return palet.items.reduce((s, item) => {
+    const qty = item.clients.reduce((ss, c) => ss + c.quantity, 0);
+    return s + prodWeight(products, item.productId, qty);
   }, 0);
 }
-
-function paletTotalUnits(palet: Palet) {
-  return palet.items.reduce((sum, item) =>
-    sum + item.clients.reduce((s, c) => s + c.quantity, 0), 0);
+function paletUnits(palet: Palet) {
+  return palet.items.reduce((s, item) => s + item.clients.reduce((ss, c) => ss + c.quantity, 0), 0);
 }
-
-function newPaletId() {
-  return `p_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function chargeNumber(existing: number) {
-  return `CRG-${format(new Date(), 'ddMMyy')}-${String(existing + 1).padStart(3, '0')}`;
+function newPaletId() { return `p_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`; }
+function buildChargeNumber(n: number) {
+  return `CRG-${format(new Date(), 'ddMMyy')}-${String(n + 1).padStart(3, '0')}`;
 }
 
 // ─────────────────────────────────────────────
-// ETIQUETA (print)
+// PALET EDITOR
 // ─────────────────────────────────────────────
-
-function printLabel(palet: Palet, city: string, products: any[]) {
-  const clientNames = [...new Set(palet.items.flatMap(i => i.clients.map(c => c.customerName)))].join(', ');
-  const rows = palet.items.map(item => {
-    const prod = products.find(p => p.id === item.productId);
-    const qty = item.clients.reduce((s, c) => s + c.quantity, 0);
-    const clientDetail = item.clients.map(c => `${c.customerName}: ${c.quantity}`).join(' | ');
-    return `<tr>
-      <td style="padding:4px 8px;border:1px solid #ddd;font-size:11px;">${prod?.name || item.productId}</td>
-      <td style="padding:4px 8px;border:1px solid #ddd;font-size:11px;text-align:center;font-weight:700;">${qty} ${prod?.uom || 'UN'}</td>
-      <td style="padding:4px 8px;border:1px solid #ddd;font-size:10px;color:#555;">${clientDetail}</td>
-      <td style="padding:4px 8px;border:1px solid #ddd;font-size:11px;text-align:right;">${productWeight(products, item.productId, qty).toFixed(1)} kg</td>
-    </tr>`;
-  }).join('');
-
-  const html = `<!DOCTYPE html><html><head><title>Etiqueta Palete ${palet.number}</title>
-  <style>body{font-family:monospace;margin:20px;}h1{font-size:22px;margin:0;}h2{font-size:14px;color:#555;margin:4px 0 12px;}table{width:100%;border-collapse:collapse;}th{background:#222;color:#fff;padding:5px 8px;font-size:11px;text-align:left;}tfoot td{background:#f0f0f0;font-weight:700;font-size:11px;padding:4px 8px;border:1px solid #ddd;}@media print{button{display:none}}</style>
-  </head><body>
-  <div style="border:3px solid #222;padding:16px;max-width:600px;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
-      <div><h1>PALETE ${String(palet.number).padStart(3, '0')}</h1><h2>📍 ${city}</h2></div>
-      <div style="text-align:right;font-size:11px;color:#555;">${format(new Date(), 'dd/MM/yyyy HH:mm')}</div>
-    </div>
-    <div style="background:#f8f8f8;border:1px solid #ddd;border-radius:4px;padding:8px 12px;margin-bottom:12px;">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#888;margin-bottom:2px;">Cliente(s)</div>
-      <div style="font-size:13px;font-weight:700;">${clientNames}</div>
-    </div>
-    <table><thead><tr><th>Produto</th><th>Qtd</th><th>Detalhes</th><th>Peso</th></tr></thead>
-    <tbody>${rows}</tbody>
-    <tfoot><tr>
-      <td colspan="2">TOTAL</td>
-      <td></td>
-      <td style="text-align:right;">${paletTotalWeight(palet, products).toFixed(1)} kg</td>
-    </tr></tfoot></table>
-    <div style="margin-top:16px;border-top:2px dashed #ccc;padding-top:10px;">
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:#888;">
-        <span>${paletTotalUnits(palet)} unidades</span>
-        <span>${paletTotalWeight(palet, products).toFixed(1)} kg</span>
-      </div>
-    </div>
-  </div>
-  <button onclick="window.print()" style="margin-top:12px;padding:8px 16px;cursor:pointer;">🖨️ Imprimir</button>
-  </body></html>`;
-
-  const win = window.open('', '_blank');
-  win?.document.write(html);
-  win?.document.close();
+interface AvailableItem {
+  productId: string;
+  productName: string;
+  uom: string;
+  perOrder: { orderId: string; customerName: string; remaining: number }[];
 }
 
-// ─────────────────────────────────────────────
-// COMPONENTE: EDITOR DE PALETE
-// ─────────────────────────────────────────────
-
-interface PaletEditorProps {
+function PaletEditor({ palet, availableItems, products, onUpdate, onDelete, city }: {
   palet: Palet;
-  availableItems: { productId: string; productName: string; uom: string; perOrder: { orderId: string; customerName: string; remaining: number }[] }[];
+  availableItems: AvailableItem[];
   products: any[];
   onUpdate: (p: Palet) => void;
   onDelete: () => void;
   city: string;
-  paletIndex: number;
-  totalPalets: number;
-}
-
-function PaletEditor({ palet, availableItems, products, onUpdate, onDelete, city, paletIndex, totalPalets }: PaletEditorProps) {
+}) {
   const [addProductId, setAddProductId] = useState('');
   const [addOrderId, setAddOrderId] = useState('');
   const [addQty, setAddQty] = useState(1);
 
-  const weight = paletTotalWeight(palet, products);
-  const units = paletTotalUnits(palet);
+  const weight = paletWeight(palet, products);
+  const units = paletUnits(palet);
 
-  const handleAddItem = () => {
+  const handleAdd = () => {
     if (!addProductId || !addOrderId || addQty <= 0) return;
-    const order = availableItems.find(a => a.productId === addProductId)
-      ?.perOrder.find(o => o.orderId === addOrderId);
-    if (!order) return;
-
+    const orderEntry = availableItems.find(a => a.productId === addProductId)?.perOrder.find(o => o.orderId === addOrderId);
+    if (!orderEntry) return;
     const updated = { ...palet };
     const existingItem = updated.items.find(i => i.productId === addProductId);
     if (existingItem) {
-      const existingClient = existingItem.clients.find(c => c.orderId === addOrderId);
-      if (existingClient) {
-        existingClient.quantity += addQty;
-      } else {
-        existingItem.clients.push({ orderId: addOrderId, customerName: order.customerName, quantity: addQty });
-      }
+      const ec = existingItem.clients.find(c => c.orderId === addOrderId);
+      if (ec) ec.quantity += addQty;
+      else existingItem.clients.push({ orderId: addOrderId, customerName: orderEntry.customerName, quantity: addQty });
     } else {
-      updated.items = [...updated.items, {
-        productId: addProductId,
-        clients: [{ orderId: addOrderId, customerName: order.customerName, quantity: addQty }],
-      }];
+      updated.items = [...updated.items, { productId: addProductId, clients: [{ orderId: addOrderId, customerName: orderEntry.customerName, quantity: addQty }] }];
     }
     onUpdate(updated);
-    setAddProductId('');
-    setAddOrderId('');
-    setAddQty(1);
+    setAddProductId(''); setAddOrderId(''); setAddQty(1);
   };
 
-  const handleRemoveClient = (productId: string, orderId: string) => {
+  const removeClient = (productId: string, orderId: string) => {
     const updated = { ...palet };
     const item = updated.items.find(i => i.productId === productId);
     if (!item) return;
     item.clients = item.clients.filter(c => c.orderId !== orderId);
-    if (item.clients.length === 0) {
-      updated.items = updated.items.filter(i => i.productId !== productId);
-    }
+    if (!item.clients.length) updated.items = updated.items.filter(i => i.productId !== productId);
     onUpdate(updated);
   };
 
-  const handleUpdateQty = (productId: string, orderId: string, qty: number) => {
-    if (qty <= 0) { handleRemoveClient(productId, orderId); return; }
+  const updateQty = (productId: string, orderId: string, qty: number) => {
+    if (qty <= 0) { removeClient(productId, orderId); return; }
     const updated = { ...palet };
-    const item = updated.items.find(i => i.productId === productId);
-    const client = item?.clients.find(c => c.orderId === orderId);
-    if (client) { client.quantity = qty; onUpdate(updated); }
+    const c = updated.items.find(i => i.productId === productId)?.clients.find(c => c.orderId === orderId);
+    if (c) { c.quantity = qty; onUpdate(updated); }
   };
 
-  const selectedProductAvailable = availableItems.find(a => a.productId === addProductId);
+  const printLabel = () => {
+    const clientNames = [...new Set(palet.items.flatMap(i => i.clients.map(c => c.customerName)))].join(', ');
+    const rows = palet.items.map(item => {
+      const prod = products.find(p => p.id === item.productId);
+      const qty = item.clients.reduce((s, c) => s + c.quantity, 0);
+      return `<tr><td style="padding:4px 8px;border:1px solid #ddd;font-size:11px;">${prod?.name || item.productId}</td><td style="padding:4px 8px;border:1px solid #ddd;font-size:11px;text-align:center;font-weight:700;">${qty}</td><td style="padding:4px 8px;border:1px solid #ddd;font-size:10px;color:#555;">${item.clients.map(c => `${c.customerName}: ${c.quantity}`).join(' | ')}</td><td style="padding:4px 8px;border:1px solid #ddd;font-size:11px;text-align:right;">${prodWeight(products, item.productId, qty).toFixed(1)} kg</td></tr>`;
+    }).join('');
+    const html = `<!DOCTYPE html><html><body><div style="border:3px solid #222;padding:16px;max-width:600px;font-family:monospace;"><h1 style="font-size:22px;margin:0;">PALETE ${String(palet.number).padStart(3, '0')}</h1><h2 style="font-size:14px;color:#555;margin:4px 0 12px;">📍 ${city}</h2><p style="font-size:13px;font-weight:700;">${clientNames}</p><table style="width:100%;border-collapse:collapse;"><thead><tr><th style="background:#222;color:#fff;padding:5px 8px;font-size:11px;text-align:left;">Produto</th><th style="background:#222;color:#fff;padding:5px 8px;font-size:11px;">Qtd</th><th style="background:#222;color:#fff;padding:5px 8px;font-size:11px;">Detalhes</th><th style="background:#222;color:#fff;padding:5px 8px;font-size:11px;">Peso</th></tr></thead><tbody>${rows}</tbody></table><p style="font-size:11px;margin-top:12px;">${units} un · ${weight.toFixed(1)} kg</p></div><button onclick="window.print()" style="margin-top:12px;padding:8px 16px;cursor:pointer;">🖨️ Imprimir</button></body></html>`;
+    const win = window.open('', '_blank');
+    win?.document.write(html); win?.document.close();
+  };
+
+  const selectedAvail = availableItems.find(a => a.productId === addProductId);
 
   return (
     <div className="bg-white border-2 border-dashed border-primary/30 rounded-xl p-4 space-y-3">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shrink-0">
             <span className="text-[10px] font-black text-primary-foreground">{String(palet.number).padStart(3, '0')}</span>
           </div>
           <div>
@@ -244,43 +209,35 @@ function PaletEditor({ palet, availableItems, products, onUpdate, onDelete, city
           <Badge variant="secondary" className="text-[8px] ml-1">{units} un</Badge>
           <Badge variant="secondary" className="text-[8px]">{weight.toFixed(1)} kg</Badge>
         </div>
-        <div className="flex items-center gap-1">
-          <Button size="sm" variant="ghost" className="h-7 gap-1 text-[10px] font-bold text-muted-foreground"
-            onClick={() => printLabel(palet, city, products)}>
+        <div className="flex gap-1">
+          <Button size="sm" variant="ghost" className="h-7 gap-1 text-[10px] font-bold text-muted-foreground" onClick={printLabel}>
             <Printer className="w-3 h-3" /> Etiqueta
           </Button>
-          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
-            onClick={onDelete}>
+          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-600" onClick={onDelete}>
             <Trash2 className="w-3.5 h-3.5" />
           </Button>
         </div>
       </div>
 
-      {/* Itens */}
       {palet.items.length > 0 && (
-        <div className="bg-zinc-50 rounded-lg divide-y divide-zinc-100">
+        <div className="bg-zinc-50 rounded-lg divide-y">
           {palet.items.map(item => {
             const prod = products.find(p => p.id === item.productId);
             const totalQty = item.clients.reduce((s, c) => s + c.quantity, 0);
             return (
               <div key={item.productId} className="px-3 py-2">
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex justify-between mb-1">
                   <span className="text-[10px] font-black uppercase">{prod?.name || item.productId}</span>
-                  <span className="text-[10px] font-black text-primary">{totalQty} {prod?.uom || 'UN'} · {productWeight(products, item.productId, totalQty).toFixed(1)}kg</span>
+                  <span className="text-[10px] font-black text-primary">{totalQty} un · {prodWeight(products, item.productId, totalQty).toFixed(1)} kg</span>
                 </div>
                 {item.clients.map(client => (
                   <div key={client.orderId} className="flex items-center justify-between py-0.5 pl-3 text-[9px] text-muted-foreground">
                     <span>{client.customerName}</span>
                     <div className="flex items-center gap-1">
-                      <button className="w-4 h-4 flex items-center justify-center hover:text-primary"
-                        onClick={() => handleUpdateQty(item.productId, client.orderId, client.quantity - 1)}>−</button>
+                      <button onClick={() => updateQty(item.productId, client.orderId, client.quantity - 1)}>−</button>
                       <span className="font-bold w-6 text-center">{client.quantity}</span>
-                      <button className="w-4 h-4 flex items-center justify-center hover:text-primary"
-                        onClick={() => handleUpdateQty(item.productId, client.orderId, client.quantity + 1)}>+</button>
-                      <button className="w-4 h-4 flex items-center justify-center text-red-400 hover:text-red-600 ml-1"
-                        onClick={() => handleRemoveClient(item.productId, client.orderId)}>
-                        <X className="w-2.5 h-2.5" />
-                      </button>
+                      <button onClick={() => updateQty(item.productId, client.orderId, client.quantity + 1)}>+</button>
+                      <button className="ml-1 text-red-400" onClick={() => removeClient(item.productId, client.orderId)}><X className="w-2.5 h-2.5" /></button>
                     </div>
                   </div>
                 ))}
@@ -290,11 +247,8 @@ function PaletEditor({ palet, availableItems, products, onUpdate, onDelete, city
         </div>
       )}
 
-      {palet.items.length === 0 && (
-        <p className="text-[9px] text-muted-foreground text-center py-3 italic">Palete vazio — adicione itens abaixo</p>
-      )}
+      {!palet.items.length && <p className="text-[9px] text-muted-foreground text-center py-3 italic">Palete vazio — adicione itens abaixo</p>}
 
-      {/* Adicionar item */}
       <div className="border border-dashed border-zinc-200 rounded-lg p-2.5 space-y-2">
         <p className="text-[9px] font-black uppercase text-muted-foreground">Adicionar item</p>
         <div className="grid grid-cols-2 gap-1.5">
@@ -309,25 +263,15 @@ function PaletEditor({ palet, availableItems, products, onUpdate, onDelete, city
           <Select value={addOrderId} onValueChange={setAddOrderId} disabled={!addProductId}>
             <SelectTrigger className="h-7 text-[10px]"><SelectValue placeholder="Cliente..." /></SelectTrigger>
             <SelectContent>
-              {selectedProductAvailable?.perOrder.filter(o => o.remaining > 0).map(o => (
-                <SelectItem key={o.orderId} value={o.orderId} className="text-xs">
-                  {o.customerName} ({o.remaining} disp.)
-                </SelectItem>
+              {selectedAvail?.perOrder.filter(o => o.remaining > 0).map(o => (
+                <SelectItem key={o.orderId} value={o.orderId} className="text-xs">{o.customerName} ({o.remaining} disp.)</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div className="flex gap-1.5">
-          <Input
-            type="number" min={1}
-            value={addQty}
-            onChange={e => setAddQty(Math.max(1, Number(e.target.value)))}
-            className="h-7 text-xs w-20"
-            disabled={!addOrderId}
-          />
-          <Button size="sm" className="h-7 flex-1 text-[10px] font-black gap-1"
-            onClick={handleAddItem}
-            disabled={!addProductId || !addOrderId || addQty <= 0}>
+          <Input type="number" min={1} value={addQty} onChange={e => setAddQty(Math.max(1, Number(e.target.value)))} className="h-7 text-xs w-20" disabled={!addOrderId} />
+          <Button size="sm" className="h-7 flex-1 text-[10px] font-black gap-1" onClick={handleAdd} disabled={!addProductId || !addOrderId}>
             <Plus className="w-3 h-3" /> Adicionar
           </Button>
         </div>
@@ -339,193 +283,191 @@ function PaletEditor({ palet, availableItems, products, onUpdate, onDelete, city
 // ─────────────────────────────────────────────
 // COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────
-
-type Step = 'history' | 'select' | 'paleting';
+type Step = 'list' | 'mount';
 
 export default function CarregamentoPage() {
-  const { orders, products, isReady } = useSystemData();
-  const [charges, setCharges] = useState<LoadingCharge[]>([]);
-  const [step, setStep] = useState<Step>('history');
-  const [expandedCharge, setExpandedCharge] = useState<string | null>(null);
+  const { orders, products, vehicles, isReady } = useSystemData();
 
-  // Step select
-  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [charges, setCharges] = useState<LoadingCharge[]>([]);
+  const [step, setStep] = useState<Step>('list');
+  const [activeGrupo, setActiveGrupo] = useState<string | null>(null);
+  const [expandedCharge, setExpandedCharge] = useState<string | null>(null);
   const [observations, setObservations] = useState('');
 
-  // Step paleting — mapa de city -> paletes
+  // paletes e rotas do grupo ativo
   const [cityPalets, setCityPalets] = useState<Record<string, Palet[]>>({});
-  const [expandedCities, setExpandedCities] = useState<Record<string, boolean>>({});
-
-  // Modal confirmação fechar
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+
+  // Filtros
+  const [pendSearch, setPendSearch] = useState('');
+  const [pendCidade, setPendCidade] = useState('ALL');
+  const [histSearch, setHistSearch] = useState('');
+  const [histDe, setHistDe] = useState('');
+  const [histAte, setHistAte] = useState('');
+
+  // Modal detalhes
+  const [detalhesOrder, setDetalhesOrder] = useState<any>(null);
 
   useEffect(() => { setCharges(loadFromStorage()); }, []);
 
-  // ── Pedidos disponíveis ──
-  const availableOrders = useMemo(() =>
-    orders.filter(o => o.status === 'AGUARDANDO_FATURAMENTO')
-      .sort((a, b) => (a.city || '').localeCompare(b.city || '')),
-    [orders]);
+  // ── Pedidos disponíveis (AGUARDANDO_FATURAMENTO não alocados)
+  const allocatedIds = useMemo(() => {
+    const ids = new Set<string>();
+    charges.forEach(c => {
+      c.cityGroups?.forEach(cg => cg.orders.forEach(id => ids.add(id)));
+      c.routes?.forEach(r => r.orders.forEach(id => ids.add(id)));
+    });
+    return ids;
+  }, [charges]);
 
-  const groupedAvailable = useMemo(() => {
-    return availableOrders.reduce((acc, o) => {
+  const pendingOrders = useMemo(() =>
+    orders.filter(o => o.status === 'AGUARDANDO_FATURAMENTO' && !allocatedIds.has(o.id))
+      .sort((a, b) => ((a as any).grupoCarga || '').localeCompare((b as any).grupoCarga || '')),
+    [orders, allocatedIds]);
+
+  // ── Agrupar por grupoCarga
+  const grupoMap = useMemo(() => {
+    const map: Record<string, typeof pendingOrders> = {};
+    pendingOrders.forEach(o => {
+      const g = (o as any).grupoCarga || 'SEM_GRUPO';
+      if (!map[g]) map[g] = [];
+      map[g].push(o);
+    });
+    return map;
+  }, [pendingOrders]);
+
+  const pendCidades = useMemo(() => [...new Set(pendingOrders.map(o => o.city).filter(Boolean))], [pendingOrders]);
+
+  const gruposFiltered = useMemo(() => {
+    return Object.entries(grupoMap).filter(([grupo, gOrders]) => {
+      const matchSearch = !pendSearch ||
+        grupo.toLowerCase().includes(pendSearch.toLowerCase()) ||
+        gOrders.some(o => o.customerName?.toLowerCase().includes(pendSearch.toLowerCase()) || o.id?.toLowerCase().includes(pendSearch.toLowerCase()));
+      const matchCidade = pendCidade === 'ALL' || gOrders.some(o => o.city === pendCidade);
+      return matchSearch && matchCidade;
+    });
+  }, [grupoMap, pendSearch, pendCidade]);
+
+  const historicoGrupos = useMemo(() => {
+    const map: Record<string, typeof orders[0][]> = {};
+    orders
+      .filter(o => ['FATURADO', 'ENTREGA', 'ENTREGUE'].includes(o.status) && (o as any).grupoCarga)
+      .forEach(o => {
+        const g = (o as any).grupoCarga;
+        if (!map[g]) map[g] = [];
+        map[g].push(o);
+      });
+    return map;
+  }, [orders]);
+
+  const historicoFiltered = useMemo(() =>
+    Object.entries(historicoGrupos).filter(([grupo]) => {
+      const matchSearch = !histSearch || grupo.toLowerCase().includes(histSearch.toLowerCase());
+      const matchDe = !histDe || historicoGrupos[grupo].some(o => new Date(o.updatedAt) >= new Date(histDe));
+      const matchAte = !histAte || historicoGrupos[grupo].some(o => new Date(o.updatedAt) <= new Date(histAte + 'T23:59:59'));
+      return matchSearch && matchDe && matchAte;
+    }), [historicoGrupos, histSearch, histDe, histAte]);
+
+  // ── Pedidos do grupo ativo separados por tipo
+  const activeOrders = useMemo(() =>
+    activeGrupo ? (grupoMap[activeGrupo] || []) : [], [activeGrupo, grupoMap]);
+
+  const paletizadoOrders = useMemo(() => activeOrders.filter(o => (o as any).tipoCarga === 'PALETIZADA'), [activeOrders]);
+  const batidaOrders = useMemo(() => activeOrders.filter(o => (o as any).tipoCarga !== 'PALETIZADA'), [activeOrders]);
+
+  const selectedByCity = useMemo(() =>
+    paletizadoOrders.reduce((acc, o) => {
       const city = o.city || 'Sem Cidade';
       if (!acc[city]) acc[city] = [];
       acc[city].push(o);
       return acc;
-    }, {} as Record<string, typeof availableOrders>);
-  }, [availableOrders]);
+    }, {} as Record<string, typeof paletizadoOrders>),
+    [paletizadoOrders]);
 
-  // ── Pedidos selecionados agrupados por cidade ──
-  const selectedOrders = useMemo(() =>
-    orders.filter(o => selectedOrderIds.includes(o.id)), [orders, selectedOrderIds]);
-
-  const selectedByCity = useMemo(() => {
-    return selectedOrders.reduce((acc, o) => {
+  // ── Inicializar montagem ao abrir grupo
+  const openGrupo = (grupo: string) => {
+    const gOrders = grupoMap[grupo] || [];
+    const palInit: Record<string, Palet[]> = {};
+    gOrders.filter(o => (o as any).tipoCarga === 'PALETIZADA').forEach(o => {
       const city = o.city || 'Sem Cidade';
-      if (!acc[city]) acc[city] = [];
-      acc[city].push(o);
-      return acc;
-    }, {} as Record<string, typeof selectedOrders>);
-  }, [selectedOrders]);
+      if (!palInit[city]) palInit[city] = [];
+    });
+    setCityPalets(palInit);
+    setObservations('');
+    setActiveGrupo(grupo);
+    setStep('mount');
+  };
 
-  // ── Available items por cidade (quanto falta alocar) ──
-  function getAvailableForCity(city: string) {
+  // ── Available items para palete por cidade
+  function getAvailableForCity(city: string): AvailableItem[] {
     const cityOrders = selectedByCity[city] || [];
     const palets = cityPalets[city] || [];
-
-    // mapa: productId -> { orderId -> quantidade já alocada }
     const allocated: Record<string, Record<string, number>> = {};
-    palets.forEach(p => {
-      p.items.forEach(item => {
-        if (!allocated[item.productId]) allocated[item.productId] = {};
-        item.clients.forEach(c => {
-          allocated[item.productId][c.orderId] = (allocated[item.productId][c.orderId] || 0) + c.quantity;
-        });
+    palets.forEach(p => p.items.forEach(item => {
+      if (!allocated[item.productId]) allocated[item.productId] = {};
+      item.clients.forEach(c => {
+        allocated[item.productId][c.orderId] = (allocated[item.productId][c.orderId] || 0) + c.quantity;
       });
-    });
-
-    const result: {
-      productId: string;
-      productName: string;
-      uom: string;
-      perOrder: { orderId: string; customerName: string; remaining: number }[];
-    }[] = [];
-
-    const productMap: Record<string, typeof result[0]> = {};
-
+    }));
+    const productMap: Record<string, AvailableItem> = {};
     cityOrders.forEach(order => {
-      order.items.forEach((item: any) => {
+      (order.items as any[]).forEach(item => {
         const prod = products.find((p: any) => p.id === item.productId);
-        if (!productMap[item.productId]) {
-          productMap[item.productId] = {
-            productId: item.productId,
-            productName: prod?.name || item.productId,
-            uom: prod?.uom || 'UN',
-            perOrder: [],
-          };
-        }
-        const allocatedQty = allocated[item.productId]?.[order.id] || 0;
-        const remaining = item.quantity - allocatedQty;
-        productMap[item.productId].perOrder.push({
-          orderId: order.id,
-          customerName: order.customerName,
-          remaining,
-        });
+        if (!productMap[item.productId]) productMap[item.productId] = { productId: item.productId, productName: prod?.name || item.productId, uom: prod?.uom || 'UN', perOrder: [] };
+        const alloc = allocated[item.productId]?.[order.id] || 0;
+        productMap[item.productId].perOrder.push({ orderId: order.id, customerName: order.customerName, remaining: item.quantity - alloc });
       });
     });
-
     return Object.values(productMap);
   }
 
-  // ── Total alocado vs total necessário por cidade ──
   function cityProgress(city: string) {
     const cityOrders = selectedByCity[city] || [];
-    const totalNeeded = cityOrders.reduce((s, o) =>
-      s + o.items.reduce((ss: number, i: any) => ss + i.quantity, 0), 0);
-    const palets = cityPalets[city] || [];
-    const totalAllocated = palets.reduce((s, p) => s + paletTotalUnits(p), 0);
-    return { totalNeeded, totalAllocated, done: totalAllocated >= totalNeeded };
+    const needed = cityOrders.reduce((s, o) => s + (o.items as any[]).reduce((ss: number, i: any) => ss + i.quantity, 0), 0);
+    const allocated = (cityPalets[city] || []).reduce((s, p) => s + paletUnits(p), 0);
+    return { needed, allocated, done: allocated >= needed };
   }
-
-  const toggleOrder = (orderId: string) => {
-    setSelectedOrderIds(prev =>
-      prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]);
-  };
-
-  const toggleCityOrders = (city: string) => {
-    const cityIds = groupedAvailable[city].map(o => o.id);
-    const allSelected = cityIds.every(id => selectedOrderIds.includes(id));
-    setSelectedOrderIds(prev =>
-      allSelected ? prev.filter(id => !cityIds.includes(id)) : [...new Set([...prev, ...cityIds])]);
-  };
-
-  const goToPaleting = () => {
-    if (selectedOrderIds.length === 0) {
-      toast({ variant: 'destructive', title: 'Selecione pedidos' });
-      return;
-    }
-    // Inicializa paletes vazios por cidade
-    const init: Record<string, Palet[]> = {};
-    Object.keys(selectedByCity).forEach(city => { init[city] = []; });
-    setCityPalets(init);
-    const expanded: Record<string, boolean> = {};
-    Object.keys(selectedByCity).forEach(city => { expanded[city] = true; });
-    setExpandedCities(expanded);
-    setStep('paleting');
-  };
 
   const addPalet = (city: string) => {
     setCityPalets(prev => {
-      const existing = prev[city] || [];
-      const allNumbers = Object.values(prev).flat().map(p => p.number);
-      const maxNum = allNumbers.length > 0 ? Math.max(...allNumbers) : 0;
-      return {
-        ...prev,
-        [city]: [...existing, { id: newPaletId(), number: maxNum + 1, items: [] }],
-      };
+      const allNums = Object.values(prev).flat().map(p => p.number);
+      const maxNum = allNums.length > 0 ? Math.max(...allNums) : 0;
+      return { ...prev, [city]: [...(prev[city] || []), { id: newPaletId(), number: maxNum + 1, items: [] }] };
     });
   };
 
-  const updatePalet = (city: string, paletIdx: number, updated: Palet) => {
-    setCityPalets(prev => ({
-      ...prev,
-      [city]: prev[city].map((p, i) => i === paletIdx ? updated : p),
-    }));
-  };
-
-  const deletePalet = (city: string, paletIdx: number) => {
-    setCityPalets(prev => ({
-      ...prev,
-      [city]: prev[city].filter((_, i) => i !== paletIdx),
-    }));
-  };
-
-  const handleSaveCharge = () => {
-    const allPalets = Object.values(cityPalets).flat();
-    if (allPalets.length === 0) {
-      toast({ variant: 'destructive', title: 'Crie ao menos um palete' });
-      return;
-    }
+  const handleSave = () => {
     setIsConfirmOpen(true);
   };
 
   const confirmSave = () => {
     const allPalets = Object.values(cityPalets).flat();
-    const totalWeightKg = allPalets.reduce((s, p) => s + paletTotalWeight(p, products), 0);
+    const paletWeight_total = allPalets.reduce((s, p) => s + paletWeight(p, products), 0);
+    const batidaWeight_total = batidaOrders.reduce((s, o) => s + (o.totalWeight || 0), 0);
 
     const cityGroups: CityGroup[] = Object.entries(cityPalets).map(([city, palets]) => ({
       city,
-      orders: selectedByCity[city]?.map(o => o.id) || [],
+      orders: (selectedByCity[city] || []).map(o => o.id),
       palets,
+    }));
+
+    const routes: Route[] = batidaOrders.map((order, idx) => ({
+      id: `route_${order.id}_${idx}`,
+      destination: order.city || 'Sem Cidade',
+      orders: [order.id],
+      totalWeightKg: order.totalWeight || 0,
+      totalUnits: (order.items as any[]).reduce((s: number, i: any) => s + i.quantity, 0),
     }));
 
     const charge: LoadingCharge = {
       id: `chg_${Date.now()}`,
-      chargeNumber: chargeNumber(charges.length),
+      chargeNumber: buildChargeNumber(charges.length),
+      grupoCarga: activeGrupo!,
       cityGroups,
-      totalWeightKg,
+      routes,
+      totalWeightKg: paletWeight_total + batidaWeight_total,
       totalPalets: allPalets.length,
+      totalRoutes: routes.length,
       createdAt: new Date().toISOString(),
       observations,
     };
@@ -533,37 +475,30 @@ export default function CarregamentoPage() {
     const updated = [charge, ...charges];
     setCharges(updated);
     saveToStorage(updated);
-    toast({ title: 'Carga fechada!', description: `${charge.chargeNumber} · ${allPalets.length} paletes · ${totalWeightKg.toFixed(1)} kg` });
-
-    // Reset
-    setSelectedOrderIds([]);
+    toast({ title: 'Carga fechada!', description: `${charge.chargeNumber} · ${activeGrupo}` });
+    setStep('list');
+    setActiveGrupo(null);
     setCityPalets({});
-    setObservations('');
     setIsConfirmOpen(false);
-    setStep('history');
   };
 
   const handleExport = (charge: LoadingCharge) => {
     const rows: any[] = [];
-    charge.cityGroups.forEach(cg => {
+    charge.cityGroups?.forEach(cg => {
       cg.palets.forEach(palet => {
         palet.items.forEach(item => {
           const prod = products.find((p: any) => p.id === item.productId);
-          const totalQty = item.clients.reduce((s, c) => s + c.quantity, 0);
           item.clients.forEach(client => {
-            rows.push({
-              CARGA: charge.chargeNumber,
-              CIDADE: cg.city,
-              PALETE: palet.number,
-              CLIENTE: client.customerName,
-              PRODUTO: prod?.name || item.productId,
-              QUANTIDADE: client.quantity,
-              TOTAL_PALETE: totalQty,
-              UOM: prod?.uom || 'UN',
-              PESO_KG: productWeight(products, item.productId, client.quantity).toFixed(1),
-            });
+            rows.push({ CARGA: charge.chargeNumber, GRUPO: charge.grupoCarga, TIPO: 'PALETIZADO', CIDADE: cg.city, PALETE: palet.number, CLIENTE: client.customerName, PRODUTO: prod?.name || item.productId, QUANTIDADE: client.quantity });
           });
         });
+      });
+    });
+    charge.routes?.forEach((route, idx) => {
+      const o = orders.find(o => o.id === route.orders[0]);
+      if (o) (o.items as any[]).forEach(item => {
+        const prod = products.find((p: any) => p.id === item.productId);
+        rows.push({ CARGA: charge.chargeNumber, GRUPO: charge.grupoCarga, TIPO: 'BATIDA', CIDADE: route.destination, ROTA: idx + 1, CLIENTE: o.customerName, PRODUTO: prod?.name || item.productId, QUANTIDADE: item.quantity });
       });
     });
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -573,369 +508,165 @@ export default function CarregamentoPage() {
   };
 
   const printRomaneio = (charge: LoadingCharge) => {
-    const cityBlocks = charge.cityGroups.map(cg => {
-      const paletRows = cg.palets.map(p => {
-        const clients = [...new Set(p.items.flatMap(i => i.clients.map(c => c.customerName)))].join(', ');
-        const itemRows = p.items.map(item => {
-          const prod = products.find((pp: any) => pp.id === item.productId);
-          const qty = item.clients.reduce((s, c) => s + c.quantity, 0);
-          return `<tr>
-            <td style="padding:3px 6px;border:1px solid #ddd;font-size:10px;">${prod?.name || item.productId}</td>
-            <td style="padding:3px 6px;border:1px solid #ddd;font-size:10px;text-align:center;">${qty} ${prod?.uom || 'UN'}</td>
-            <td style="padding:3px 6px;border:1px solid #ddd;font-size:10px;text-align:right;">${paletTotalWeight(p, products).toFixed(1)} kg</td>
-          </tr>`;
-        }).join('');
-        return `<div style="margin-bottom:8px;border:1px solid #ddd;border-radius:4px;padding:8px;">
-          <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-            <strong style="font-size:11px;">Palete ${String(p.number).padStart(3, '0')}</strong>
-            <span style="font-size:10px;color:#555;">${clients}</span>
-          </div>
-          <table style="width:100%;border-collapse:collapse;"><tbody>${itemRows}</tbody></table>
-        </div>`;
-      }).join('');
-      return `<div style="margin-bottom:20px;page-break-inside:avoid;">
-        <h3 style="font-size:13px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #222;padding-bottom:4px;margin-bottom:8px;">📍 ${cg.city}</h3>
-        ${paletRows}
-      </div>`;
-    }).join('');
+    let body = `<h2>Grupo: ${charge.grupoCarga}</h2>`;
 
-    const html = `<!DOCTYPE html><html><head><title>Romaneio ${charge.chargeNumber}</title>
-    <style>body{font-family:monospace;margin:24px;}h1{font-size:20px;}@media print{button{display:none}}</style>
-    </head><body>
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;border-bottom:3px solid #222;padding-bottom:12px;">
-      <div><h1>ROMANEIO DE CARGA</h1><p style="font-size:12px;color:#555;margin:2px 0;">${charge.chargeNumber} · ${format(new Date(charge.createdAt), 'dd/MM/yyyy HH:mm')}</p></div>
-      <div style="text-align:right;font-size:11px;"><p><strong>${charge.totalPalets} paletes</strong></p><p>${charge.totalWeightKg.toFixed(1)} kg</p></div>
-    </div>
-    ${cityBlocks}
-    <button onclick="window.print()" style="margin-top:16px;padding:8px 20px;cursor:pointer;">🖨️ Imprimir</button>
-    </body></html>`;
+    if (charge.cityGroups?.length) {
+      body += `<h3>📦 Paletizados</h3>`;
+      charge.cityGroups.forEach(cg => {
+        body += `<h4>📍 ${cg.city}</h4>`;
+        cg.palets.forEach(p => {
+          const clients = [...new Set(p.items.flatMap(i => i.clients.map(c => c.customerName)))].join(', ');
+          body += `<p><strong>Palete ${String(p.number).padStart(3, '0')}</strong> — ${clients}</p><table style="width:100%;border-collapse:collapse;margin-bottom:8px;">`;
+          p.items.forEach(item => {
+            const prod = products.find((pp: any) => pp.id === item.productId);
+            const qty = item.clients.reduce((s, c) => s + c.quantity, 0);
+            body += `<tr><td style="border:1px solid #ddd;padding:3px 6px;font-size:10px;">${prod?.name}</td><td style="border:1px solid #ddd;padding:3px 6px;font-size:10px;text-align:center;">${qty} un</td><td style="border:1px solid #ddd;padding:3px 6px;font-size:10px;text-align:right;">${paletWeight(p, products).toFixed(1)} kg</td></tr>`;
+          });
+          body += `</table>`;
+        });
+      });
+    }
 
+    if (charge.routes?.length) {
+      body += `<h3>🏠 Batida</h3>`;
+      charge.routes.forEach((route, idx) => {
+        const o = orders.find(o => o.id === route.orders[0]);
+        if (!o) return;
+        body += `<p><strong>Rota ${idx + 1}</strong> — ${o.customerName} (📍 ${route.destination})</p><table style="width:100%;border-collapse:collapse;margin-bottom:8px;">`;
+        (o.items as any[]).forEach(item => {
+          const prod = products.find((p: any) => p.id === item.productId);
+          body += `<tr><td style="border:1px solid #ddd;padding:3px 6px;font-size:10px;">${prod?.name}</td><td style="border:1px solid #ddd;padding:3px 6px;font-size:10px;text-align:center;">${item.quantity} un</td></tr>`;
+        });
+        body += `</table>`;
+      });
+    }
+
+    const html = `<!DOCTYPE html><html><head><title>Romaneio ${charge.chargeNumber}</title><style>body{font-family:monospace;margin:24px;}h3,h4{border-bottom:1px solid #ccc;padding-bottom:4px;}@media print{button{display:none}}</style></head><body><h1>ROMANEIO DE CARGA</h1><p>${charge.chargeNumber} · ${format(new Date(charge.createdAt), 'dd/MM/yyyy HH:mm')} · ${charge.totalWeightKg.toFixed(1)} kg</p>${body}<button onclick="window.print()" style="margin-top:16px;padding:8px 20px;">🖨️ Imprimir</button></body></html>`;
     const win = window.open('', '_blank');
-    win?.document.write(html);
-    win?.document.close();
+    win?.document.write(html); win?.document.close();
   };
 
   if (!isReady) return null;
 
-  const totalWeightPending = availableOrders.reduce((s, o) => s + (o.totalWeight || 0), 0);
+  const totalWeightPending = pendingOrders.reduce((s, o) => s + (o.totalWeight || 0), 0);
 
-  return (
-    <div className="space-y-6">
-      {/* KPIs */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="border-none shadow-sm bg-white">
-          <CardContent className="p-4">
-            <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest mb-1">Para Carregar</p>
-            <p className="text-2xl font-black">{availableOrders.length} <span className="text-sm font-bold text-muted-foreground">pedidos</span></p>
-          </CardContent>
-        </Card>
-        <Card className="border-none shadow-sm bg-white">
-          <CardContent className="p-4">
-            <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest mb-1">Cargas Fechadas</p>
-            <p className="text-2xl font-black text-green-600">{charges.length}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-none shadow-sm bg-white">
-          <CardContent className="p-4">
-            <p className="text-[9px] font-black uppercase text-muted-foreground tracking-widest mb-1">Peso Pendente</p>
-            <p className="text-2xl font-black text-amber-600">{(totalWeightPending / 1000).toFixed(1)} <span className="text-sm font-bold">ton</span></p>
-          </CardContent>
-        </Card>
-      </div>
+  // ─── STEP: MONTAR CARGA ───────────────────────────────────────────────
+  if (step === 'mount' && activeGrupo) {
+    // Info do grupo (pega do primeiro pedido)
+    const firstOrder = activeOrders[0] as any;
+    const vehicle = firstOrder?.assignedVehicleId ? vehicles.find((v: any) => v.id === firstOrder.assignedVehicleId) : null;
 
-      {/* ══════════════════════════════════════════
-          STEP: HISTÓRICO
-      ══════════════════════════════════════════ */}
-      {step === 'history' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-black uppercase tracking-tight">Histórico de Cargas</h2>
-              <p className="text-[10px] font-bold uppercase text-muted-foreground">Todas as cargas fechadas</p>
-            </div>
-            <Button className="gap-2 font-bold text-xs uppercase" onClick={() => setStep('select')}>
-              <Plus className="w-4 h-4" /> Nova Carga
-            </Button>
-          </div>
-
-          {charges.length === 0 && (
-            <Card className="border-none shadow-sm">
-              <CardContent className="py-16 text-center text-muted-foreground italic text-xs uppercase opacity-40">
-                Nenhuma carga fechada ainda.
-              </CardContent>
-            </Card>
-          )}
-
-          <div className="space-y-3">
-            {charges.map(charge => (
-              <Collapsible
-                key={charge.id}
-                open={expandedCharge === charge.id}
-                onOpenChange={() => setExpandedCharge(expandedCharge === charge.id ? null : charge.id)}>
-                <Card className="border-none shadow-sm overflow-hidden">
-                  <CollapsibleTrigger asChild>
-                    <CardContent className="p-4 cursor-pointer hover:bg-muted/20 transition-colors">
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center">
-                            <Truck className="w-4 h-4 text-primary" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-black text-primary">{charge.chargeNumber}</p>
-                            <p className="text-[9px] text-muted-foreground">
-                              {charge.cityGroups.length} cidade(s) · {charge.totalPalets} paletes · {charge.totalWeightKg.toFixed(1)} kg
-                            </p>
-                          </div>
-                          <Badge className="bg-green-100 text-green-800 border-green-200 text-[9px] font-black">✓ Fechada</Badge>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] text-muted-foreground">{format(new Date(charge.createdAt), 'dd/MM HH:mm')}</span>
-                          {expandedCharge === charge.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <CardContent className="px-4 pb-4 pt-0 border-t space-y-4">
-                      {charge.observations && (
-                        <p className="text-[10px] text-muted-foreground bg-muted/30 rounded p-2">{charge.observations}</p>
-                      )}
-                      {charge.cityGroups.map((cg, idx) => (
-                        <div key={idx} className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-3.5 h-3.5 text-primary" />
-                            <h4 className="text-[10px] font-black uppercase">{cg.city}</h4>
-                            <Badge variant="outline" className="text-[8px]">{cg.palets.length} paletes</Badge>
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                            {cg.palets.map(palet => {
-                              const clients = [...new Set(palet.items.flatMap(i => i.clients.map(c => c.customerName)))];
-                              return (
-                                <div key={palet.id} className="bg-zinc-50 border rounded-lg p-2.5">
-                                  <div className="flex items-center justify-between mb-1.5">
-                                    <span className="text-[10px] font-black">Palete {String(palet.number).padStart(3, '0')}</span>
-                                    <span className="text-[9px] text-muted-foreground">{paletTotalWeight(palet, products).toFixed(1)}kg</span>
-                                  </div>
-                                  <p className="text-[8px] text-muted-foreground mb-1.5">{clients.join(', ')}</p>
-                                  {palet.items.map(item => {
-                                    const prod = products.find((p: any) => p.id === item.productId);
-                                    const qty = item.clients.reduce((s, c) => s + c.quantity, 0);
-                                    return (
-                                      <p key={item.productId} className="text-[8px] text-zinc-600">
-                                        {prod?.name} × {qty}
-                                      </p>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                      <div className="flex gap-2 pt-2 border-t">
-                        <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold"
-                          onClick={() => printRomaneio(charge)}>
-                          <Printer className="w-3.5 h-3.5" /> Romaneio
-                        </Button>
-                        <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold"
-                          onClick={() => handleExport(charge)}>
-                          <Download className="w-3.5 h-3.5" /> Exportar XLSX
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
-            ))}
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" className="gap-1.5 font-bold text-xs" onClick={() => { setStep('list'); setActiveGrupo(null); }}>
+            <ArrowLeft className="w-3.5 h-3.5" /> Voltar
+          </Button>
+          <div className="flex-1">
+            <h2 className="text-lg font-black uppercase tracking-tight">Montagem de Carga</h2>
+            <p className="text-[10px] font-bold uppercase text-muted-foreground font-mono">{activeGrupo}</p>
           </div>
         </div>
-      )}
 
-      {/* ══════════════════════════════════════════
-          STEP: SELECIONAR PEDIDOS
-      ══════════════════════════════════════════ */}
-      {step === 'select' && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" className="gap-1.5 font-bold text-xs"
-              onClick={() => { setStep('history'); setSelectedOrderIds([]); }}>
-              <ArrowLeft className="w-3.5 h-3.5" /> Voltar
-            </Button>
-            <div>
-              <h2 className="text-lg font-black uppercase tracking-tight">Selecionar Pedidos</h2>
-              <p className="text-[10px] font-bold uppercase text-muted-foreground">
-                Escolha os pedidos desta carga — agrupados por cidade
-              </p>
-            </div>
-          </div>
-
-          {availableOrders.length === 0 && (
-            <Card className="border-none shadow-sm">
-              <CardContent className="py-16 text-center text-muted-foreground italic text-xs uppercase opacity-40">
-                Nenhum pedido aguardando faturamento.
-              </CardContent>
-            </Card>
-          )}
-
-          {Object.entries(groupedAvailable).map(([city, cityOrders]) => {
-            const cityIds = cityOrders.map(o => o.id);
-            const allSelected = cityIds.every(id => selectedOrderIds.includes(id));
-            const someSelected = cityIds.some(id => selectedOrderIds.includes(id));
-            const totalSacos = cityOrders.reduce((s, o) =>
-              s + o.items.reduce((ss: number, i: any) => ss + i.quantity, 0), 0);
-            const totalKg = cityOrders.reduce((s, o) => s + (o.totalWeight || 0), 0);
-
-            return (
-              <div key={city} className="border rounded-xl overflow-hidden shadow-sm">
-                {/* Cabeçalho da cidade */}
-                <div className="bg-primary/5 px-4 py-3 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      ref={el => { if (el) el.indeterminate = someSelected && !allSelected; }}
-                      onChange={() => toggleCityOrders(city)}
-                      className="w-4 h-4 accent-primary cursor-pointer"
-                    />
-                    <MapPin className="w-3.5 h-3.5 text-primary" />
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-primary">{city}</h3>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[9px] bg-white">{cityOrders.length} ped.</Badge>
-                    <Badge variant="outline" className="text-[9px] bg-white">{totalSacos} un</Badge>
-                    <Badge variant="outline" className="text-[9px] bg-white">{totalKg.toFixed(1)} kg</Badge>
-                  </div>
-                </div>
-
-                {/* Pedidos da cidade */}
-                <div className="divide-y bg-white">
-                  {cityOrders.map(order => {
-                    const isSelected = selectedOrderIds.includes(order.id);
-                    const sacos = order.items.reduce((s: number, i: any) => s + i.quantity, 0);
-                    return (
-                      <div
-                        key={order.id}
-                        className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/20'}`}
-                        onClick={() => toggleOrder(order.id)}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleOrder(order.id)}
-                          className="w-4 h-4 accent-primary cursor-pointer"
-                          onClick={e => e.stopPropagation()}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-[11px] font-black text-primary">{order.id}</span>
-                            <span className="text-[11px] font-black uppercase truncate">{order.customerName}</span>
-                          </div>
-                          <p className="text-[9px] text-muted-foreground">{order.customerAddress || '---'}</p>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <Badge variant="outline" className="text-[9px]">{sacos} un</Badge>
-                          <Badge variant="outline" className="text-[9px]">{(order.totalWeight || 0).toFixed(1)} kg</Badge>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+        {/* Info do grupo */}
+        <Card className="border shadow-sm">
+          <CardContent className="p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+              <div>
+                <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Veículo</p>
+                <p className="font-bold">{vehicle ? `${vehicle.model} · ${vehicle.plate}` : '—'}</p>
               </div>
-            );
-          })}
+              <div>
+                <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Data Carregamento</p>
+                <p className="font-bold">{fmtDate(firstOrder?.dataCarregamento, true)}</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Data Entrega</p>
+                <p className="font-bold">{fmtDate(firstOrder?.scheduledDeliveryDate)}</p>
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Pedidos</p>
+                <p className="font-bold">{activeOrders.length} · {activeOrders.reduce((s, o) => s + (o.totalWeight || 0), 0).toFixed(1)} kg</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Resumo seleção + obs */}
-          {selectedOrderIds.length > 0 && (
-            <Card className="border-none shadow-sm bg-primary text-primary-foreground">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div className="flex items-center gap-4 flex-wrap">
-                    {[
-                      { label: 'Pedidos', value: selectedOrderIds.length },
-                      { label: 'Cidades', value: Object.keys(selectedByCity).length },
-                      { label: 'Sacos', value: selectedOrders.reduce((s, o) => s + o.items.reduce((ss: number, i: any) => ss + i.quantity, 0), 0) },
-                      { label: 'Peso', value: `${selectedOrders.reduce((s, o) => s + (o.totalWeight || 0), 0).toFixed(1)} kg` },
-                    ].map(item => (
-                      <div key={item.label}>
-                        <p className="text-[9px] font-black uppercase opacity-70">{item.label}</p>
-                        <p className="text-sm font-black">{item.value}</p>
-                      </div>
-                    ))}
+        {/* Seção BATIDA */}
+        {batidaOrders.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Home className="w-4 h-4 text-amber-600" />
+              <p className="text-sm font-black uppercase">Batida — {batidaOrders.length} pedido(s)</p>
+              <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[9px]">Entrega Direta</Badge>
+            </div>
+            <div className="space-y-2">
+              {batidaOrders.map((order, idx) => (
+                <div key={order.id} className="border-2 border-amber-200 rounded-xl p-4 bg-amber-50/30">
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div>
+                      <p className="text-sm font-black uppercase">{order.customerName}</p>
+                      <p className="text-[9px] text-muted-foreground font-mono">{order.id} · 📍 {order.city}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-[9px]">{(order.items as any[]).reduce((s: number, i: any) => s + i.quantity, 0)} un</Badge>
+                      <Badge variant="outline" className="text-[9px]">{(order.totalWeight || 0).toFixed(1)} kg</Badge>
+                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDetalhesOrder(order)}>
+                        <Eye className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    className="bg-white text-primary hover:bg-white/90 font-black text-xs uppercase gap-2"
-                    onClick={goToPaleting}>
-                    <Layers className="w-3.5 h-3.5" /> Montar Paletes
-                  </Button>
+                  <div className="bg-white rounded-lg p-2 divide-y">
+                    {(order.items as any[]).map(item => {
+                      const prod = products.find((p: any) => p.id === item.productId);
+                      return (
+                        <div key={item.productId} className="flex justify-between py-1.5 text-xs">
+                          <span className="font-bold">{prod?.name || item.productId}</span>
+                          <span className="text-muted-foreground">{item.quantity} un · {prodWeight(products, item.productId, item.quantity).toFixed(1)} kg</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div>
-                  <label className="text-[9px] font-black uppercase opacity-70">Observações (opcional)</label>
-                  <Input
-                    placeholder="Ex: Veículo Volvo ABC-1234 — motorista João"
-                    className="mt-1 h-8 text-xs bg-white/10 border-white/20 text-white placeholder:text-white/40"
-                    value={observations}
-                    onChange={e => setObservations(e.target.value)}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════
-          STEP: MONTAR PALETES
-      ══════════════════════════════════════════ */}
-      {step === 'paleting' && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" className="gap-1.5 font-bold text-xs"
-              onClick={() => setStep('select')}>
-              <ArrowLeft className="w-3.5 h-3.5" /> Voltar
-            </Button>
-            <div>
-              <h2 className="text-lg font-black uppercase tracking-tight">Montagem de Paletes</h2>
-              <p className="text-[10px] font-bold uppercase text-muted-foreground">
-                {selectedOrderIds.length} pedidos · {Object.keys(selectedByCity).length} cidade(s)
-              </p>
+              ))}
             </div>
           </div>
+        )}
 
-          {/* Por cidade */}
-          {Object.entries(selectedByCity).map(([city, cityOrders]) => {
-            const palets = cityPalets[city] || [];
-            const progress = cityProgress(city);
-            const isExpanded = expandedCities[city] !== false;
-            const totalKg = cityOrders.reduce((s, o) => s + (o.totalWeight || 0), 0);
+        {/* Seção PALETIZADO */}
+        {paletizadoOrders.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-blue-600" />
+              <p className="text-sm font-black uppercase">Paletizado — {paletizadoOrders.length} pedido(s)</p>
+              <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[9px]">Montagem por Palete</Badge>
+            </div>
 
-            return (
-              <div key={city} className="border rounded-xl overflow-hidden shadow-sm">
-                {/* Header da cidade */}
-                <div
-                  className={`px-4 py-3 flex items-center justify-between cursor-pointer ${progress.done ? 'bg-green-50 border-green-200' : 'bg-primary/5'}`}
-                  onClick={() => setExpandedCities(prev => ({ ...prev, [city]: !isExpanded }))}>
-                  <div className="flex items-center gap-3">
-                    <MapPin className={`w-3.5 h-3.5 ${progress.done ? 'text-green-600' : 'text-primary'}`} />
-                    <h3 className={`text-[10px] font-black uppercase tracking-widest ${progress.done ? 'text-green-700' : 'text-primary'}`}>{city}</h3>
-                    {progress.done && <Badge className="bg-green-100 text-green-700 border-green-200 text-[8px]">✓ Completo</Badge>}
+            {Object.entries(selectedByCity).map(([city, cityOrders]) => {
+              const palets = cityPalets[city] || [];
+              const progress = cityProgress(city);
+
+              return (
+                <div key={city} className="border rounded-xl overflow-hidden shadow-sm">
+                  <div className={`px-4 py-3 flex items-center justify-between ${progress.done ? 'bg-green-50' : 'bg-primary/5'}`}>
+                    <div className="flex items-center gap-2">
+                      <MapPin className={`w-3.5 h-3.5 ${progress.done ? 'text-green-600' : 'text-primary'}`} />
+                      <p className={`text-[10px] font-black uppercase tracking-widest ${progress.done ? 'text-green-700' : 'text-primary'}`}>{city}</p>
+                      {progress.done && <Badge className="bg-green-100 text-green-700 border-green-200 text-[8px]">✓ Completo</Badge>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-[9px] bg-white">{cityOrders.length} ped.</Badge>
+                      <Badge variant="outline" className={`text-[9px] bg-white ${progress.done ? 'border-green-300 text-green-700' : ''}`}>
+                        {progress.allocated}/{progress.needed} un
+                      </Badge>
+                      <Badge variant="outline" className="text-[9px] bg-white">{palets.length} paletes</Badge>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-[9px] bg-white">{cityOrders.length} ped.</Badge>
-                    <Badge variant="outline" className="text-[9px] bg-white">{totalKg.toFixed(1)} kg</Badge>
-                    <Badge variant="outline" className={`text-[9px] bg-white ${progress.done ? 'border-green-300 text-green-700' : ''}`}>
-                      {progress.totalAllocated}/{progress.totalNeeded} un alocadas
-                    </Badge>
-                    <Badge variant="outline" className="text-[9px] bg-white">{palets.length} paletes</Badge>
-                    {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </div>
-                </div>
 
-                {isExpanded && (
                   <div className="bg-white p-4 space-y-4">
-                    {/* Resumo dos pedidos da cidade */}
+                    {/* Tabela de pedidos/alocação */}
                     <div className="bg-zinc-50 rounded-lg overflow-hidden">
-                      <div className="px-3 py-2 bg-zinc-100">
-                        <p className="text-[9px] font-black uppercase text-muted-foreground">Pedidos desta cidade</p>
-                      </div>
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -947,13 +678,11 @@ export default function CarregamentoPage() {
                         </TableHeader>
                         <TableBody>
                           {cityOrders.flatMap(order =>
-                            order.items.map((item: any) => {
+                            (order.items as any[]).map(item => {
                               const prod = products.find((p: any) => p.id === item.productId);
-                              // calc alocado
                               const alocado = palets.reduce((s, p) => {
-                                const paletItem = p.items.find(pi => pi.productId === item.productId);
-                                const client = paletItem?.clients.find(c => c.orderId === order.id);
-                                return s + (client?.quantity || 0);
+                                const c = p.items.find(pi => pi.productId === item.productId)?.clients.find(c => c.orderId === order.id);
+                                return s + (c?.quantity || 0);
                               }, 0);
                               const ok = alocado >= item.quantity;
                               return (
@@ -976,99 +705,310 @@ export default function CarregamentoPage() {
 
                     {/* Paletes */}
                     <div className="space-y-3">
-                      {palets.map((palet, paletIdx) => (
+                      {palets.map((palet, idx) => (
                         <PaletEditor
                           key={palet.id}
                           palet={palet}
                           availableItems={getAvailableForCity(city)}
                           products={products}
-                          onUpdate={(updated) => updatePalet(city, paletIdx, updated)}
-                          onDelete={() => deletePalet(city, paletIdx)}
+                          onUpdate={updated => setCityPalets(prev => ({ ...prev, [city]: prev[city].map((p, i) => i === idx ? updated : p) }))}
+                          onDelete={() => setCityPalets(prev => ({ ...prev, [city]: prev[city].filter((_, i) => i !== idx) }))}
                           city={city}
-                          paletIndex={paletIdx}
-                          totalPalets={palets.length}
                         />
                       ))}
                     </div>
 
-                    <Button
-                      variant="outline"
-                      className="w-full gap-2 font-bold text-xs uppercase border-dashed"
-                      onClick={() => addPalet(city)}>
+                    <Button variant="outline" className="w-full gap-2 font-bold text-xs uppercase border-dashed" onClick={() => addPalet(city)}>
                       <Plus className="w-3.5 h-3.5" /> Adicionar Palete para {city}
                     </Button>
                   </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Resumo geral + botão fechar */}
-          <Card className="border-none shadow-sm bg-zinc-900 text-white">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-6 flex-wrap">
-                  {[
-                    { label: 'Total Paletes', value: Object.values(cityPalets).flat().length },
-                    { label: 'Total Unidades', value: Object.values(cityPalets).flat().reduce((s, p) => s + paletTotalUnits(p), 0) },
-                    { label: 'Peso Total', value: `${Object.values(cityPalets).flat().reduce((s, p) => s + paletTotalWeight(p, products), 0).toFixed(1)} kg` },
-                  ].map(item => (
-                    <div key={item.label}>
-                      <p className="text-[9px] font-black uppercase opacity-50">{item.label}</p>
-                      <p className="text-xl font-black">{item.value}</p>
-                    </div>
-                  ))}
                 </div>
-                <Button
-                  className="bg-green-500 hover:bg-green-400 text-white font-black text-xs uppercase gap-2"
-                  onClick={handleSaveCharge}>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Footer fechar carga */}
+        <Card className="border-none shadow-sm bg-zinc-900 text-white">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-6 flex-wrap">
+                {[
+                  { label: 'Paletes', value: Object.values(cityPalets).flat().length },
+                  { label: 'Rotas', value: batidaOrders.length },
+                  { label: 'Peso', value: `${(Object.values(cityPalets).flat().reduce((s, p) => s + paletWeight(p, products), 0) + batidaOrders.reduce((s, o) => s + (o.totalWeight || 0), 0)).toFixed(1)} kg` },
+                ].map(item => (
+                  <div key={item.label}>
+                    <p className="text-[9px] font-black uppercase opacity-50">{item.label}</p>
+                    <p className="text-xl font-black">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2 w-full md:w-64">
+                <Input
+                  placeholder="Observações (opcional)"
+                  className="h-8 text-xs bg-white/10 border-white/20 text-white placeholder:text-white/40"
+                  value={observations}
+                  onChange={e => setObservations(e.target.value)}
+                />
+                <Button className="w-full bg-green-500 hover:bg-green-400 text-white font-black text-xs uppercase gap-2" onClick={handleSave}>
                   <CheckCircle2 className="w-4 h-4" /> Fechar Carga
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* ══════════════════════════════════════════
-          MODAL: CONFIRMAR FECHAR CARGA
-      ══════════════════════════════════════════ */}
-      <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="font-black uppercase">Confirmar Fechamento</DialogTitle>
-            <DialogDescription className="text-[10px] uppercase font-bold">
-              Revise antes de fechar
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 py-2 text-sm">
-            <div className="bg-muted/30 rounded-lg p-3 space-y-1">
-              <div className="flex justify-between text-[10px] font-bold">
-                <span>Pedidos</span><span>{selectedOrderIds.length}</span>
-              </div>
-              <div className="flex justify-between text-[10px] font-bold">
-                <span>Cidades</span><span>{Object.keys(selectedByCity).join(', ')}</span>
-              </div>
-              <div className="flex justify-between text-[10px] font-bold">
-                <span>Paletes</span><span>{Object.values(cityPalets).flat().length}</span>
-              </div>
-              <div className="flex justify-between text-[10px] font-bold">
-                <span>Peso</span>
-                <span>{Object.values(cityPalets).flat().reduce((s, p) => s + paletTotalWeight(p, products), 0).toFixed(1)} kg</span>
+        {/* Confirm dialog */}
+        <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="font-black uppercase">Confirmar Fechamento</DialogTitle>
+              <DialogDescription className="text-[10px] uppercase font-bold">Revise antes de fechar</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 py-2">
+              <div className="bg-muted/30 rounded-lg p-3 space-y-1">
+                {[
+                  { label: 'Grupo', value: activeGrupo },
+                  { label: 'Paletes', value: Object.values(cityPalets).flat().length },
+                  { label: 'Rotas', value: batidaOrders.length },
+                  { label: 'Pedidos', value: activeOrders.length },
+                ].map(item => (
+                  <div key={item.label} className="flex justify-between text-[10px] font-bold">
+                    <span>{item.label}</span><span>{item.value}</span>
+                  </div>
+                ))}
               </div>
             </div>
-            <p className="text-[10px] text-muted-foreground">
-              O status dos pedidos <strong>não será alterado</strong> — isso é feito no processo fiscal separado.
-            </p>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setIsConfirmOpen(false)} className="font-bold text-xs uppercase">Cancelar</Button>
+              <Button onClick={confirmSave} className="font-black text-xs uppercase gap-2 bg-green-600 hover:bg-green-700">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Confirmar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <OrderDetailsModal isOpen={!!detalhesOrder} order={detalhesOrder} products={products} onClose={() => setDetalhesOrder(null)} statusLabels={STATUS_LABELS} actions={[]} />
+      </div>
+    );
+  }
+
+  // ─── STEP: LIST ───────────────────────────────────────────────────────
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <SummaryCard label="Grupos Pendentes" value={Object.keys(grupoMap).length} unit="grupos" color="info" />
+        <SummaryCard label="Cargas Fechadas" value={charges.length} unit="cargas" color="success" />
+        <SummaryCard label="Peso Pendente" value={`${(totalWeightPending / 1000).toFixed(1)} ton`} unit="" color="primary" />
+      </div>
+
+      <Tabs defaultValue="pendentes" className="w-full">
+        <TabsList className="grid w-full max-w-[400px] grid-cols-2">
+          <TabsTrigger value="pendentes" className="gap-2 font-bold text-xs uppercase"><Package className="w-4 h-4" /> Pendentes</TabsTrigger>
+          <TabsTrigger value="historico" className="gap-2 font-bold text-xs uppercase"><ClipboardList className="w-4 h-4" /> Histórico</TabsTrigger>
+        </TabsList>
+
+        {/* ── PENDENTES ── */}
+        <TabsContent value="pendentes" className="mt-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-black uppercase tracking-tight">Grupos de Carga</h2>
+              <p className="text-[10px] font-bold uppercase text-muted-foreground">Agrupados por Grupo de Carga da Logística</p>
+            </div>
+            <span className="text-[9px] font-bold text-muted-foreground uppercase">{gruposFiltered.length} grupos</span>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsConfirmOpen(false)} className="font-bold text-xs uppercase">Cancelar</Button>
-            <Button onClick={confirmSave} className="font-black text-xs uppercase gap-2 bg-green-600 hover:bg-green-700">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+
+          <FilterPanel
+            fields={[
+              { type: 'search', key: 'search', placeholder: 'Grupo ou cliente...', value: pendSearch, onChange: setPendSearch, className: 'md:col-span-2' },
+              { type: 'select', key: 'cidade', placeholder: 'Cidade', value: pendCidade, onChange: setPendCidade, options: [{ label: 'Todas', value: 'ALL' }, ...pendCidades.map(c => ({ label: c!, value: c! }))] },
+            ]}
+            onClear={() => { setPendSearch(''); setPendCidade('ALL'); }}
+            gridCols="grid-cols-1 sm:grid-cols-3"
+          />
+
+          {gruposFiltered.length === 0 && (
+            <Card className="border-none shadow-sm">
+              <CardContent className="py-16 text-center text-muted-foreground italic text-xs uppercase opacity-40">
+                Nenhum grupo pendente.
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="space-y-3">
+            {gruposFiltered.map(([grupo, gOrders]) => {
+              const first = gOrders[0] as any;
+              const vehicle = first?.assignedVehicleId ? vehicles.find((v: any) => v.id === first.assignedVehicleId) : null;
+              const totalKg = gOrders.reduce((s, o) => s + (o.totalWeight || 0), 0);
+              const totalSacs = gOrders.reduce((s, o) => s + (o.items as any[]).reduce((ss: number, i: any) => ss + i.quantity, 0), 0);
+              const cidades = [...new Set(gOrders.map(o => o.city).filter(Boolean))];
+              const nPal = gOrders.filter(o => (o as any).tipoCarga === 'PALETIZADA').length;
+              const nBat = gOrders.filter(o => (o as any).tipoCarga !== 'PALETIZADA').length;
+
+              return (
+                <Card key={grupo} className="border shadow-sm hover:shadow-md transition-shadow">
+                  <CardContent className="p-5">
+                    <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
+                      <div className="space-y-2 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-black font-mono text-primary">{grupo}</p>
+                          {nPal > 0 && <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[9px]"><Layers className="w-3 h-3 mr-1" />{nPal} Paletizado</Badge>}
+                          {nBat > 0 && <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[9px]"><Home className="w-3 h-3 mr-1" />{nBat} Batida</Badge>}
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                          <div>
+                            <p className="text-[9px] font-black uppercase text-muted-foreground">Veículo</p>
+                            <p className="font-bold">{vehicle ? `${vehicle.model} · ${vehicle.plate}` : '—'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black uppercase text-muted-foreground">Carregamento</p>
+                            <p className="font-bold">{fmtDate(first?.dataCarregamento, true)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black uppercase text-muted-foreground">Entrega</p>
+                            <p className="font-bold">{fmtDate(first?.scheduledDeliveryDate)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[9px] font-black uppercase text-muted-foreground">Cidades</p>
+                            <p className="font-bold">{cidades.join(', ') || '—'}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                          <Badge variant="outline" className="text-[9px]">{gOrders.length} pedidos</Badge>
+                          <Badge variant="outline" className="text-[9px]">{totalSacs} un</Badge>
+                          <Badge variant="outline" className="text-[9px]">{totalKg.toFixed(1)} kg</Badge>
+                        </div>
+                      </div>
+                      <Button className="font-black text-xs uppercase gap-2 shrink-0" onClick={() => openGrupo(grupo)}>
+                        <Layers className="w-4 h-4" /> Montar Carga
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </TabsContent>
+
+        {/* ── HISTÓRICO ── */}
+        <TabsContent value="historico" className="mt-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-black uppercase tracking-tight">Histórico de Cargas</h2>
+              <p className="text-[10px] font-bold uppercase text-muted-foreground">Cargas já fechadas</p>
+            </div>
+            <span className="text-[9px] font-bold text-muted-foreground uppercase">{historicoFiltered.length} cargas</span>
+          </div>
+
+          <FilterPanel
+            fields={[
+              { type: 'search', key: 'search', placeholder: 'Número ou grupo...', value: histSearch, onChange: setHistSearch, className: 'md:col-span-2' },
+              { type: 'date', key: 'de', placeholder: 'De', value: histDe, onChange: setHistDe },
+              { type: 'date', key: 'ate', placeholder: 'Até', value: histAte, onChange: setHistAte },
+            ]}
+            onClear={() => { setHistSearch(''); setHistDe(''); setHistAte(''); }}
+            gridCols="grid-cols-1 sm:grid-cols-2 md:grid-cols-4"
+          />
+
+          {historicoFiltered.length === 0 ? (
+            <Card className="border-none shadow-sm">
+              <CardContent className="py-16 text-center text-muted-foreground italic text-xs uppercase opacity-40">Nenhuma carga encontrada.</CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {charges.map(charge => (
+                <Collapsible key={charge.id} open={expandedCharge === charge.id} onOpenChange={() => setExpandedCharge(expandedCharge === charge.id ? null : charge.id)}>
+                  <Card className="border-none shadow-sm overflow-hidden">
+                    <CollapsibleTrigger asChild>
+                      <CardContent className="p-4 cursor-pointer hover:bg-muted/20 transition-colors">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center">
+                              <Truck className="w-4 h-4 text-primary" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-black text-primary">{charge.chargeNumber}</p>
+                              <p className="text-[9px] text-muted-foreground font-mono">{charge.grupoCarga} · {charge.totalPalets} paletes · {charge.totalRoutes} rotas · {charge.totalWeightKg.toFixed(1)} kg</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] text-muted-foreground">{fmtDate(charge.createdAt, true)}</span>
+                            {expandedCharge === charge.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent className="px-4 pb-4 pt-0 border-t space-y-3">
+                        {charge.observations && <p className="text-[10px] text-muted-foreground bg-muted/30 rounded p-2">{charge.observations}</p>}
+
+                        {/* Paletes */}
+                        {charge.cityGroups?.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-black uppercase text-blue-700 flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> Paletizados</p>
+                            {charge.cityGroups.map((cg, i) => (
+                              <div key={i}>
+                                <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">📍 {cg.city}</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {cg.palets.map(p => {
+                                    const clients = [...new Set(p.items.flatMap(i => i.clients.map(c => c.customerName)))].join(', ');
+                                    return (
+                                      <div key={p.id} className="border border-blue-200 rounded-lg p-2 bg-blue-50/30">
+                                        <div className="flex justify-between mb-1">
+                                          <p className="text-[10px] font-black text-blue-700">Palete {String(p.number).padStart(3, '0')}</p>
+                                          <p className="text-[9px] text-muted-foreground">{paletUnits(p)} un · {paletWeight(p, products).toFixed(1)} kg</p>
+                                        </div>
+                                        <p className="text-[8px] text-muted-foreground">{clients}</p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Rotas */}
+                        {charge?.routes?.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-black uppercase text-amber-700 flex items-center gap-1"><Home className="w-3.5 h-3.5" /> Batida</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                              {charge.routes.map((route, idx) => {
+                                const o = orders.find(o => o.id === route.orders[0]);
+                                return (
+                                  <div key={route.id} className="border border-amber-200 rounded-lg p-2 bg-amber-50/30">
+                                    <div className="flex justify-between">
+                                      <p className="text-[10px] font-black text-amber-700">{idx + 1}. {o?.customerName || '—'}</p>
+                                      <p className="text-[9px] text-muted-foreground">{route.totalUnits} un · {route.totalWeightKg.toFixed(1)} kg</p>
+                                    </div>
+                                    <p className="text-[8px] text-muted-foreground">📍 {route.destination}</p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 pt-2 border-t">
+                          <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold flex-1" onClick={() => printRomaneio(charge)}>
+                            <Printer className="w-3.5 h-3.5" /> Romaneio
+                          </Button>
+                          <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold flex-1" onClick={() => handleExport(charge)}>
+                            <Download className="w-3.5 h-3.5" /> Exportar
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      <OrderDetailsModal isOpen={!!detalhesOrder} order={detalhesOrder} products={products} onClose={() => setDetalhesOrder(null)} statusLabels={STATUS_LABELS} actions={[]} />
     </div>
   );
 }
