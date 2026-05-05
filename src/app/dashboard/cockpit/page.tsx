@@ -58,117 +58,56 @@ const workingDaysInMonth = () => {
     return count;
 };
 
+type Goal = {
+    id: string;
+    revenue: number;
+    tons: number;
+    notes?: string;
+};
+
 // ─── Componentes de Tela ──────────────────────────────────────────────────────
 
 /** Tela 1 — KPIs + Metas */
 function Screen1({
     monthMetrics, goalMetrics, currentGoal, statusMetrics, projectionMetrics
 }: any) {
-    const revPct = goalMetrics.revenuePercentage;
-    const tonPct = goalMetrics.tonsPercentage;
+
 
     return (
-        <div style={s.screenGrid1}>
-            {/* KPI Faturamento */}
-            <div style={{ ...s.kpiCard, gridColumn: '1 / 2' }}>
-                <div style={s.kpiHeader}>
-                    <span style={s.kpiEyebrow}>💰 FATURAMENTO NO MÊS</span>
-                    {currentGoal && (
+        <>
+            <div style={s.screenGrid1}>
+                <div style={{ ...s.kpiCard, gridColumn: '1 / 2' }}>
+                    <div style={s.kpiHeader}>
+                        <span style={s.kpiEyebrow}>💰 FATURAMENTO NO MÊS</span>
+                    </div>
+                    <div style={s.kpiBigValue}>
+                        {fmtBRLk(monthMetrics.totalRevenue)}
+                    </div>
+                    <div style={s.projRow}>
+                        <TrendingUp size={14} color="#10b981" />
+                        <span style={s.projLabel}>Projeção final: </span>
+                        <span style={s.projValue}>{fmtBRLk(projectionMetrics.projectedRevenue)}</span>
                         <span style={{
-                            ...s.badge,
-                            background: revPct >= 100 ? '#14532d' : revPct >= 70 ? '#713f12' : '#7f1d1d',
-                            color: revPct >= 100 ? '#4ade80' : revPct >= 70 ? '#fbbf24' : '#f87171',
+                            ...s.projDiff,
+                            color: projectionMetrics.projectedRevenue >= (currentGoal?.revenue || 0) ? '#4ade80' : '#f87171'
                         }}>
-                            {revPct.toFixed(1)}% DA META
+                            {currentGoal
+                                ? projectionMetrics.projectedRevenue >= currentGoal.revenue
+                                    ? `+${fmtBRLk(projectionMetrics.projectedRevenue - currentGoal.revenue)} acima`
+                                    : `${fmtBRLk(projectionMetrics.projectedRevenue - currentGoal.revenue)} abaixo`
+                                : ''}
                         </span>
-                    )}
+                    </div>
                 </div>
-                <div style={s.kpiBigValue}>
-                    {fmtBRLk(monthMetrics.totalRevenue)}
-                </div>
-                {currentGoal && (
-                    <>
-                        <div style={s.kpiMetaRow}>
-                            <span style={s.kpiMetaLabel}>Meta: {fmtBRLk(currentGoal.revenue)}</span>
-                            <span style={s.kpiMetaLabel}>
-                                {goalMetrics.revenueRemaining > 0
-                                    ? `Faltam ${fmtBRLk(goalMetrics.revenueRemaining)}`
-                                    : '✅ Atingido'}
-                            </span>
-                        </div>
-                        <div style={s.progressTrack}>
-                            <div style={{
-                                ...s.progressBar,
-                                width: `${revPct}%`,
-                                background: revPct >= 100
-                                    ? 'linear-gradient(90deg,#16a34a,#4ade80)'
-                                    : revPct >= 70
-                                        ? 'linear-gradient(90deg,#d97706,#fbbf24)'
-                                        : 'linear-gradient(90deg,#dc2626,#f87171)',
-                            }} />
-                        </div>
-                    </>
-                )}
-                {/* Projeção */}
-                <div style={s.projRow}>
-                    <TrendingUp size={14} color="#10b981" />
-                    <span style={s.projLabel}>Projeção final: </span>
-                    <span style={s.projValue}>{fmtBRLk(projectionMetrics.projectedRevenue)}</span>
-                    <span style={{
-                        ...s.projDiff,
-                        color: projectionMetrics.projectedRevenue >= (currentGoal?.revenue || 0) ? '#4ade80' : '#f87171'
-                    }}>
-                        {currentGoal
-                            ? projectionMetrics.projectedRevenue >= currentGoal.revenue
-                                ? `+${fmtBRLk(projectionMetrics.projectedRevenue - currentGoal.revenue)} acima`
-                                : `${fmtBRLk(projectionMetrics.projectedRevenue - currentGoal.revenue)} abaixo`
-                            : ''}
-                    </span>
-                </div>
-            </div>
 
-            {/* KPI Toneladas */}
-            <div style={{ ...s.kpiCard, gridColumn: '2 / 3' }}>
-                <div style={s.kpiHeader}>
-                    <span style={s.kpiEyebrow}>📦 TONELADAS VENDIDAS</span>
-                    {currentGoal && (
-                        <span style={{
-                            ...s.badge,
-                            background: tonPct >= 100 ? '#14532d' : tonPct >= 70 ? '#713f12' : '#7f1d1d',
-                            color: tonPct >= 100 ? '#4ade80' : tonPct >= 70 ? '#fbbf24' : '#f87171',
-                        }}>
-                            {tonPct.toFixed(1)}% DA META
-                        </span>
-                    )}
-                </div>
-                <div style={s.kpiBigValue}>
-                    {monthMetrics.totalTons.toFixed(1)}
-                    <span style={s.kpiUnit}>t</span>
-                </div>
-                {currentGoal && (
-                    <>
-                        <div style={s.kpiMetaRow}>
-                            <span style={s.kpiMetaLabel}>Meta: {currentGoal.tons.toFixed(1)}t</span>
-                            <span style={s.kpiMetaLabel}>
-                                {goalMetrics.tonsRemaining > 0
-                                    ? `Faltam ${goalMetrics.tonsRemaining.toFixed(1)}t`
-                                    : '✅ Atingido'}
-                            </span>
-                        </div>
-                        <div style={s.progressTrack}>
-                            <div style={{
-                                ...s.progressBar,
-                                width: `${tonPct}%`,
-                                background: tonPct >= 100
-                                    ? 'linear-gradient(90deg,#16a34a,#4ade80)'
-                                    : tonPct >= 70
-                                        ? 'linear-gradient(90deg,#d97706,#fbbf24)'
-                                        : 'linear-gradient(90deg,#dc2626,#f87171)',
-                            }} />
-                        </div>
-                    </>
-                )}
-                <div style={s.projRow}>
+                <div style={{ ...s.kpiCard, gridColumn: '2 / 3' }}>
+                    <div style={s.kpiHeader}>
+                        <span style={s.kpiEyebrow}>📦 TONELADAS VENDIDAS</span>
+                    </div>
+                    <div style={s.kpiBigValue}>
+                        {monthMetrics.totalTons.toFixed(1)}
+                        <span style={s.kpiUnit}>t</span>
+                    </div>
                     <TrendingUp size={14} color="#10b981" />
                     <span style={s.projLabel}>Projeção final: </span>
                     <span style={s.projValue}>{projectionMetrics.projectedTons.toFixed(1)}t</span>
@@ -184,9 +123,11 @@ function Screen1({
                     </span>
                 </div>
             </div>
-
-            {/* Status Cards */}
-            <div style={{ ...s.statusRow, gridColumn: '1 / 3' }}>
+            <div style={{
+                ...s.statusRow,
+                justifyContent: 'center',
+                alignItems: 'center',
+            }}>
                 {[
                     { icon: '📋', label: 'PRODUÇÃO', value: statusMetrics.emProducao, color: '#f59e0b' },
                     { icon: '📦', label: 'LOGÍSTICA', value: statusMetrics.emLogistica, color: '#3b82f6' },
@@ -203,10 +144,7 @@ function Screen1({
                         <span style={s.statChipLabel}>{item.label}</span>
                     </div>
                 ))}
-            </div>
-
-            {/* Mini KPIs */}
-            <div style={{ ...s.miniRow, gridColumn: '1 / 3' }}>
+            </div><div style={{ ...s.miniRow, gridColumn: '1 / 3' }}>
                 <div style={s.miniKpi}>
                     <div style={s.miniKpiLabel}>TICKET MÉDIO</div>
                     <div style={s.miniKpiValue}>
@@ -238,7 +176,7 @@ function Screen1({
                     <div style={s.miniKpiValue}>{projectionMetrics.remainingWorkingDays}</div>
                 </div>
             </div>
-        </div>
+        </>
     );
 }
 
@@ -392,39 +330,6 @@ function Screen3({ cityRanking, projectionMetrics, monthMetrics, currentGoal, go
             {/* Coluna direita: projeção + velocidade */}
             <div style={{ gridColumn: '2 / 3', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-                {/* Projeção visual */}
-                <div style={s.projCard}>
-                    <div style={s.chartTitle}>🎯 PROJEÇÃO DE FECHAMENTO</div>
-                    <div style={s.projGrid}>
-                        <div style={s.projBlock}>
-                            <div style={s.projBlockLabel}>FATURAMENTO PROJETADO</div>
-                            <div style={{ ...s.projBlockValue, color: projectionMetrics.projectedRevenue >= (currentGoal?.revenue || 0) ? '#4ade80' : '#f87171' }}>
-                                {fmtBRLk(projectionMetrics.projectedRevenue)}
-                            </div>
-                            {currentGoal && (
-                                <div style={{ ...s.projBlockSub, color: projectionMetrics.projectedRevenue >= currentGoal.revenue ? '#4ade80' : '#f87171' }}>
-                                    {projectionMetrics.projectedRevenue >= currentGoal.revenue
-                                        ? `✅ +${fmtBRLk(projectionMetrics.projectedRevenue - currentGoal.revenue)} acima da meta`
-                                        : `⚠️ ${fmtBRLk(projectionMetrics.projectedRevenue - currentGoal.revenue)} abaixo da meta`}
-                                </div>
-                            )}
-                        </div>
-                        <div style={s.projBlock}>
-                            <div style={s.projBlockLabel}>TONELADAS PROJETADAS</div>
-                            <div style={{ ...s.projBlockValue, color: projectionMetrics.projectedTons >= (currentGoal?.tons || 0) ? '#4ade80' : '#f87171' }}>
-                                {projectionMetrics.projectedTons.toFixed(1)}t
-                            </div>
-                            {currentGoal && (
-                                <div style={{ ...s.projBlockSub, color: projectionMetrics.projectedTons >= currentGoal.tons ? '#4ade80' : '#f87171' }}>
-                                    {projectionMetrics.projectedTons >= currentGoal.tons
-                                        ? `✅ +${(projectionMetrics.projectedTons - currentGoal.tons).toFixed(1)}t acima`
-                                        : `⚠️ ${(projectionMetrics.projectedTons - currentGoal.tons).toFixed(1)}t abaixo`}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
                 {/* Velocidade de vendas */}
                 <div style={s.projCard}>
                     <div style={s.chartTitle}>⚡ VELOCIDADE DE VENDAS</div>
@@ -456,19 +361,6 @@ function Screen3({ cityRanking, projectionMetrics, monthMetrics, currentGoal, go
                     </div>
 
                     {/* Necessário por dia para bater a meta */}
-                    {currentGoal && goalMetrics && (
-                        <div style={s.neededRow}>
-                            <Zap size={16} color="#fbbf24" />
-                            <span style={s.neededText}>
-                                Para bater a meta de faturamento, precisa de{' '}
-                                <strong style={{ color: '#fbbf24' }}>
-                                    {projectionMetrics.remainingWorkingDays > 0
-                                        ? fmtBRLk(Math.max(0, (currentGoal.revenue - monthMetrics.totalRevenue) / projectionMetrics.remainingWorkingDays))
-                                        : 'R$ 0'} / dia útil
-                                </strong>
-                            </span>
-                        </div>
-                    )}
                 </div>
             </div>
         </div>
@@ -478,7 +370,7 @@ function Screen3({ cityRanking, projectionMetrics, monthMetrics, currentGoal, go
 // ─── Componente principal ─────────────────────────────────────────────────────
 
 function CockpitContent() {
-    const { orders, salesGoals, isReady } = useSystemData();
+    const { orders, isReady } = useSystemData();
     const [isEditingGoal, setIsEditingGoal] = useState(false);
     const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
     const [formData, setFormData] = useState({ revenue: '', tons: '', notes: '' });
@@ -539,10 +431,10 @@ function CockpitContent() {
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
 
-    const currentGoal = useMemo(() =>
-        salesGoals.find(g => g.month === currentMonth && g.year === currentYear),
-        [salesGoals, currentMonth, currentYear]
-    );
+
+
+    const currentGoal: Goal | null = null; // Sem dados de metas
+    const safeGoal = currentGoal ?? { revenue: 0, tons: 0 };
 
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
@@ -554,49 +446,73 @@ function CockpitContent() {
         }),
         [orders]
     );
+    // ─── NORMALIZAÇÃO DE STATUS ─────────────────────────────
+    const isRevenueStatus = (status: string) =>
+        ['FATURADO', 'ENTREGUE'].includes(status);
 
-    const billedOrders = useMemo(() =>
-        monthOrders.filter(o => ['FATURADO', 'ENTREGA', 'AGUARDANDO_FATURAMENTO'].includes(o.status)),
+    const isOperationalStatus = (status: string) =>
+        ['PRODUCAO', 'PRONTO_LOGISTICA', 'AGUARDANDO_FATURAMENTO', 'ENTREGA'].includes(status);
+
+
+
+    // ─── BASE REAL DE FATURAMENTO ───────────────────────────
+    const revenueOrders = useMemo(() =>
+        monthOrders.filter(o => isRevenueStatus(o.status)),
         [monthOrders]
     );
 
+    // ─── MÉTRICAS PRINCIPAIS ────────────────────────────────
     const monthMetrics = useMemo(() => {
-        const totalRevenue = billedOrders.reduce((sum, o) => sum + (o.totalValue || 0), 0);
-        const totalTons = billedOrders.reduce((sum, o) => sum + (o.totalWeight || 0), 0) / 1000;
-        return { totalRevenue, totalTons, count: billedOrders.length };
-    }, [billedOrders]);
+        const totalRevenue = revenueOrders.reduce((sum, o) => sum + (o.totalValue || 0), 0);
 
+        const totalWeightKg = revenueOrders.reduce((sum, o) => sum + (o.totalWeight || 0), 0);
+        const totalTons = totalWeightKg / 1000;
+
+        return {
+            totalRevenue,
+            totalTons,
+            count: revenueOrders.length,
+        };
+    }, [revenueOrders]);
+
+    // ─── STATUS OPERACIONAL REAL ────────────────────────────
     const statusMetrics = useMemo(() => {
         const emProducao = orders.filter(o => o.status === 'PRODUCAO').length;
         const emLogistica = orders.filter(o => ['PRONTO_LOGISTICA', 'AGUARDANDO_FATURAMENTO'].includes(o.status)).length;
         const emEntrega = orders.filter(o => o.status === 'ENTREGA').length;
+
         const entregues = orders.filter(o => o.status === 'ENTREGUE').length;
+        const faturados = orders.filter(o => o.status === 'FATURADO').length;
         const rejeitados = orders.filter(o => o.status === 'REJEITADO').length;
+
         const totalAtivos = emProducao + emLogistica + emEntrega;
-        const totalProcessados = entregues + rejeitados;
+
+        const totalFinalizados = entregues + rejeitados;
+
         return {
-            emProducao, emLogistica, emEntrega, entregues, rejeitados, totalAtivos, totalProcessados,
-            eficienciaEntrega: totalProcessados > 0 ? ((entregues / totalProcessados) * 100).toFixed(1) : '0',
+            emProducao,
+            emLogistica,
+            emEntrega,
+            entregues,
+            faturados,
+            rejeitados,
+            totalAtivos,
+            eficienciaEntrega:
+                totalFinalizados > 0
+                    ? ((entregues / totalFinalizados) * 100).toFixed(1)
+                    : '0',
         };
     }, [orders]);
 
-    const goalMetrics = useMemo(() => {
-        const revPct = currentGoal?.revenue ? (monthMetrics.totalRevenue / currentGoal.revenue) * 100 : 0;
-        const tonPct = currentGoal?.tons ? (monthMetrics.totalTons / currentGoal.tons) * 100 : 0;
-        return {
-            revenuePercentage: Math.min(revPct, 100),
-            tonsPercentage: Math.min(tonPct, 100),
-            revenueRemaining: Math.max((currentGoal?.revenue || 0) - monthMetrics.totalRevenue, 0),
-            tonsRemaining: Math.max((currentGoal?.tons || 0) - monthMetrics.totalTons, 0),
-        };
-    }, [currentGoal, monthMetrics]);
-
+    // ─── PROJEÇÃO CORRIGIDA ─────────────────────────────────
     const projectionMetrics = useMemo(() => {
         const wdSoFar = workingDaysSoFar();
         const wdTotal = workingDaysInMonth();
         const wdRemaining = wdTotal - wdSoFar;
+
         const revenuePerWD = wdSoFar > 0 ? monthMetrics.totalRevenue / wdSoFar : 0;
         const tonsPerWD = wdSoFar > 0 ? monthMetrics.totalTons / wdSoFar : 0;
+
         return {
             projectedRevenue: revenuePerWD * wdTotal,
             projectedTons: tonsPerWD * wdTotal,
@@ -606,51 +522,104 @@ function CockpitContent() {
             remainingWorkingDays: wdRemaining,
         };
     }, [monthMetrics]);
+    const goalMetrics = useMemo(() => {
+        if (!currentGoal) {
+            return {
+                revenuePercentage: 0,
+                tonsPercentage: 0,
+                revenueRemaining: 0,
+                tonsRemaining: 0,
+            };
+        }
 
-    const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
-    const timeSeriesData = useMemo(() =>
-        daysInMonth.map(day => {
-            const dayOrders = billedOrders.filter(o => {
-                const od = new Date(o.createdAt);
-                const s = new Date(day); s.setHours(0, 0, 0, 0);
-                const e = new Date(day); e.setHours(23, 59, 59, 999);
-                return od >= s && od <= e;
+        const revenuePercentage =
+            (safeGoal?.revenue ?? 0) > 0
+                ? (monthMetrics.totalRevenue / (safeGoal!.revenue)) * 100
+                : 0;
+
+        const tonsPercentage =
+            (safeGoal?.tons ?? 0) > 0
+                ? (monthMetrics.totalTons / (safeGoal!.tons)) * 100
+                : 0;
+
+        return {
+            revenuePercentage,
+            tonsPercentage,
+            revenueRemaining: safeGoal.revenue - monthMetrics.totalRevenue,
+            tonsRemaining: safeGoal.tons - monthMetrics.totalTons,
+        };
+    }, [safeGoal, monthMetrics]);
+    const daysInMonth = useMemo(() => {
+        return eachDayOfInterval({
+            start: startOfMonth(now),
+            end: endOfMonth(now),
+        });
+    }, [now]);
+
+    // ─── TIME SERIES LIMPO ──────────────────────────────────
+    const timeSeriesData = useMemo(() => {
+        return daysInMonth.map(day => {
+            const start = new Date(day);
+            start.setHours(0, 0, 0, 0);
+
+            const end = new Date(day);
+            end.setHours(23, 59, 59, 999);
+
+            const dayOrders = revenueOrders.filter(o => {
+                const d = new Date(o.createdAt);
+                return d >= start && d <= end;
             });
+
+            const faturamento = dayOrders.reduce((sum, o) => sum + (o.totalValue || 0), 0);
+
             return {
                 data: format(day, 'dd/MM'),
                 pedidos: dayOrders.length,
-                faturamento: dayOrders.reduce((sum, o) => sum + (o.totalValue || 0), 0),
+                faturamento,
             };
-        }),
-        [billedOrders]
-    );
+        });
+    }, [revenueOrders]);
 
+    // ─── SCATTER POR CIDADE ─────────────────────────────────
     const cityScatterData = useMemo(() => {
         const map: Record<string, { count: number; value: number; peso: number }> = {};
-        billedOrders.forEach(o => {
+
+        revenueOrders.forEach(o => {
             const city = o.city || 'Sem Cidade';
-            if (!map[city]) map[city] = { count: 0, value: 0, peso: 0 };
+
+            if (!map[city]) {
+                map[city] = { count: 0, value: 0, peso: 0 };
+            }
+
             map[city].count++;
             map[city].value += o.totalValue || 0;
             map[city].peso += o.totalWeight || 0;
         });
+
         return Object.entries(map).map(([city, d]) => ({
             city,
             ticketMedio: d.count > 0 ? d.value / d.count : 0,
             toneladas: d.peso / 1000,
             count: d.count,
         }));
-    }, [billedOrders]);
+    }, [revenueOrders]);
 
+    // ─── RANKING CORRIGIDO ──────────────────────────────────
     const cityRanking = useMemo(() => {
         const map: Record<string, { count: number; value: number; peso: number }> = {};
-        billedOrders.forEach(o => {
+
+        revenueOrders.forEach(o => {
             const city = o.city || 'Sem Cidade';
-            if (!map[city]) map[city] = { count: 0, value: 0, peso: 0 };
+
+            if (!map[city]) {
+                map[city] = { count: 0, value: 0, peso: 0 };
+            }
+
             map[city].count++;
             map[city].value += o.totalValue || 0;
             map[city].peso += o.totalWeight || 0;
         });
+
         return Object.entries(map)
             .map(([city, d]) => ({
                 city,
@@ -660,49 +629,16 @@ function CockpitContent() {
                 avgTicket: d.count > 0 ? d.value / d.count : 0,
             }))
             .sort((a, b) => b.totalValue - a.totalValue);
-    }, [billedOrders]);
+    }, [revenueOrders]);
 
     const handleSaveGoal = async () => {
-        try {
-            setIsLoading(true);
-            const revenue = parseFloat(formData.revenue) || 0;
-            const tons = parseFloat(formData.tons) || 0;
-            if (revenue < 0 || tons < 0) {
-                toast({ title: 'Erro', description: 'Valores devem ser maiores que zero', variant: 'destructive' });
-                return;
-            }
-            if (editingGoalId && currentGoal) {
-                const res = await fetch(`/api/sales-goals/${currentGoal.id}`, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ revenue, tons, notes: formData.notes || null }),
-                });
-                if (!res.ok) throw new Error('Erro ao atualizar meta');
-                toast({ title: 'Sucesso', description: 'Meta atualizada com sucesso' });
-            } else {
-                const res = await fetch('/api/sales-goals', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ month: currentMonth, year: currentYear, revenue, tons, notes: formData.notes || null }),
-                });
-                if (!res.ok) throw new Error('Erro ao criar meta');
-                toast({ title: 'Sucesso', description: 'Meta criada com sucesso' });
-            }
-            window.location.reload();
-        } catch (err) {
-            toast({ title: 'Erro', description: err instanceof Error ? err.message : 'Erro ao salvar meta', variant: 'destructive' });
-        } finally {
-            setIsLoading(false);
-            setIsEditingGoal(false);
-            setEditingGoalId(null);
-            setFormData({ revenue: '', tons: '', notes: '' });
-        }
+        toast({ title: 'Info', description: 'Metas não estão disponíveis neste momento', variant: 'default' });
     };
 
     const handleEditClick = () => {
         if (currentGoal) {
-            setFormData({ revenue: currentGoal.revenue.toString(), tons: currentGoal.tons.toString(), notes: currentGoal.notes || '' });
-            setEditingGoalId(currentGoal.id);
+            setFormData({ revenue: safeGoal.revenue.toString(), tons: safeGoal.tons.toString(), notes: '' });
+            setEditingGoalId('current'); // ID fictício, pois não temos backend
         } else {
             setFormData({ revenue: '', tons: '', notes: '' });
             setEditingGoalId(null);
@@ -739,7 +675,7 @@ function CockpitContent() {
                         style={{ borderRadius: 10, boxShadow: '0 0 20px rgba(22,163,74,0.5)' }}
                     />
                     <div>
-                        <div style={s.headerTitle}>NOVOCIOLO COCKPIT</div>
+                        <div style={s.headerTitle}>NOVO CICLO</div>
                         <div style={s.headerSub}>Resumo Comercial · Ensacados</div>
                     </div>
                 </div>
@@ -817,72 +753,8 @@ function CockpitContent() {
             </div>
 
             {/* Footer com observações */}
-            {currentGoal?.notes && (
-                <div style={s.footerNotes}>
-                    <span style={{ color: '#fbbf24', fontWeight: 900, marginRight: 8 }}>📌</span>
-                    {currentGoal.notes}
-                </div>
-            )}
 
             {/* Modal */}
-            <Dialog open={isEditingGoal} onOpenChange={setIsEditingGoal}>
-                <DialogContent className="max-w-md bg-white border-green-200 text-slate-900">
-                    <DialogHeader>
-                        <DialogTitle className="text-slate-900">
-                            {currentGoal ? 'Atualizar Meta do Mês' : 'Definir Meta do Mês'}
-                        </DialogTitle>
-                        <DialogDescription className="text-slate-600">
-                            {format(now, "MMMM 'de' yyyy", { locale: ptBR })}
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                        <div>
-                            <Label className="text-slate-700 text-xs font-bold uppercase tracking-widest">Faturamento (R$)</Label>
-                            <Input
-                                type="number" placeholder="Ex: 240000"
-                                value={formData.revenue}
-                                onChange={e => setFormData(p => ({ ...p, revenue: e.target.value }))}
-                                disabled={isLoading}
-                                className="bg-green-50 border-green-300 text-slate-900 font-bold"
-                            />
-                        </div>
-                        <div>
-                            <Label className="text-slate-700 text-xs font-bold uppercase tracking-widest">Toneladas</Label>
-                            <Input
-                                type="number" placeholder="Ex: 50"
-                                value={formData.tons}
-                                onChange={e => setFormData(p => ({ ...p, tons: e.target.value }))}
-                                disabled={isLoading}
-                                className="bg-green-50 border-green-300 text-slate-900 font-bold"
-                            />
-                        </div>
-                        <div>
-                            <Label className="text-slate-700 text-xs font-bold uppercase tracking-widest">Observações</Label>
-                            <Input
-                                type="text" placeholder="Ex: Mês de pico"
-                                value={formData.notes}
-                                onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
-                                disabled={isLoading}
-                                className="bg-green-50 border-green-300 text-slate-900"
-                            />
-                        </div>
-                    </div>
-                    <DialogFooter className="gap-2">
-                        <Button
-                            variant="outline"
-                            onClick={() => { setIsEditingGoal(false); setEditingGoalId(null); setFormData({ revenue: '', tons: '', notes: '' }); }}
-                            disabled={isLoading}
-                            className="border-green-300 text-green-700 hover:bg-green-50"
-                        >
-                            Cancelar
-                        </Button>
-                        <Button onClick={handleSaveGoal} disabled={isLoading} className="gap-2 bg-green-600 hover:bg-green-700">
-                            {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                            Salvar
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

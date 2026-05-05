@@ -217,12 +217,14 @@ function OrderFormModal({
   const [observations, setObservations] = useState('');
   const [priceList, setPriceList] = useState(priceTables[0]?.id || 'PADRAO');
   const [cart, setCart] = useState<OrderItem[]>([]);
+  const [createdAt, setCreatedAt] = useState('');
 
   // ── FIX: único ponto de inicialização — roda apenas quando `open` muda para true ──
   useEffect(() => {
     if (!open) return;
 
     if (editingOrder) {
+      setCreatedAt(editingOrder.createdAt?.slice(0, 10) || '');
       setCustomerId(editingOrder.id);
       setCustomerSearch(editingOrder.customerName);
       setCustomer({
@@ -253,6 +255,8 @@ function OrderFormModal({
       setObservations('');
       setPriceList(initialPriceList || priceTables[0]?.id || 'PADRAO');
       setCart(initialCart || []);
+      setCreatedAt(new Date().toISOString().slice(0, 10));
+
     }
     setCustomerSearchOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -294,6 +298,10 @@ function OrderFormModal({
   };
 
   const handleSave = () => {
+    if (!customerId) {
+      toast({ variant: "destructive", title: "Selecione um cliente da lista." });
+      return;
+    }
     if (!customerId && !editingOrder) {
       toast({ variant: "destructive", title: "Cliente obrigatório" }); return;
     }
@@ -303,7 +311,7 @@ function OrderFormModal({
     onSave({
       isEdit: !!editingOrder,
       originalId: editingOrder?.id,
-      id: customerId || undefined,
+      customerId: customerId || undefined,
       customerName: customer.name, customerEmail: customer.email,
       customerPhone: customer.phone, customerAddress: customer.address,
       customerCpfCnpj: customer.document, city: customer.city,
@@ -313,6 +321,8 @@ function OrderFormModal({
       seller, closedBy: closingPerson || undefined,
       paymentCondition, deliveryDate, priceTableId: priceList,
       observations,
+      createdAt: new Date(createdAt).toISOString(),
+
     });
     onOpenChange(false);
   };
@@ -321,8 +331,11 @@ function OrderFormModal({
   const cartWeight = calcCartWeight(cart, products);
 
   return (
-    <Dialog open={open} onOpenChange={(val) => { if (!val) onOpenChange(false); }}>
-      <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto p-0 gap-0">
+    <Dialog
+      key={open ? 'open' : 'closed'}
+      open={open}
+      onOpenChange={onOpenChange}
+    >      <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto p-0 gap-0">
         <DialogTitle className="sr-only">
           {editingOrder ? `Editando · ${editingOrder.id}` : 'Novo Pedido'}
         </DialogTitle>
@@ -406,6 +419,15 @@ function OrderFormModal({
                   {PAYMENT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase">Data do Pedido *</label>
+              <Input
+                type="date"
+                className="h-9 text-xs"
+                value={createdAt}
+                onChange={e => setCreatedAt(e.target.value)}
+              />
             </div>
           </div>
 
@@ -519,6 +541,25 @@ function OrderFormModal({
   );
 }
 
+function generateOrderId(existingOrders: Order[]): string {
+  const existingIds = new Set(existingOrders.map(o => o.id));
+
+  let newId = '';
+  let attempts = 0;
+
+  do {
+    const randomNumber = Math.floor(1000 + Math.random() * 9000); // 4 dígitos
+    newId = `PED-${randomNumber}`;
+    attempts++;
+
+    if (attempts > 50) {
+      throw new Error('Falha ao gerar ID único');
+    }
+  } while (existingIds.has(newId));
+
+  return newId;
+}
+
 // ─────────────────────────────────────────────
 // COMPONENTE RAIZ
 // ─────────────────────────────────────────────
@@ -555,11 +596,10 @@ export default function PedidosPage() {
       await updateOrder(originalId, orderData);
       toast({ title: "Pedido atualizado com sucesso." });
     } else {
-      const newId = `PED-${1000 + orders.length + 1}`;
+      const newId = generateOrderId(orders);
       const newOrder: Order = {
         id: newId,
         status: 'PENDENTE',
-        createdAt: new Date().toISOString(),
         user: "Admin",
         ...orderData,
       } as any;

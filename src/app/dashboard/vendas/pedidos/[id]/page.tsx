@@ -126,13 +126,31 @@ export default function OrderDetailsPage() {
         </div>
     );
 
+    function fmtDuration(start?: string | null, end?: string | null) {
+        if (!start || !end) return '—';
+
+        const diffMs = new Date(end).getTime() - new Date(start).getTime();
+        if (diffMs <= 0) return '—';
+
+        const minutes = Math.floor(diffMs / 60000);
+        const hours = Math.floor(minutes / 60);
+        const days = Math.floor(hours / 24);
+
+        const h = hours % 24;
+        const m = minutes % 60;
+
+        if (days > 0) return `${days}d ${h}h`;
+        if (hours > 0) return `${hours}h ${m}min`;
+        return `${minutes}min`;
+    }
+
     const [statusLabel, statusCls] = STATUS_MAP[order.status] ?? [order.status, 'bg-muted text-muted-foreground border-muted'];
 
     return (
         <div className="min-h-screen bg-white flex flex-col">
 
             {/* ── HEADER ── */}
-            <div className="bg-primary px-6 py-6 flex flex-col gap-4">
+            <div className="bg-primary px-6 py-4 flex flex-col gap-3">
                 <div className="flex justify-between items-start">
                     <div className="flex items-start gap-3">
                         <Button variant="ghost" size="icon" className="text-white/70 hover:text-white hover:bg-white/10 mt-0.5 shrink-0" onClick={() => router.back()}>
@@ -157,7 +175,7 @@ export default function OrderDetailsPage() {
                     </div>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-white pl-10">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-white/90 pl-10">
                     <div>
                         <p className="text-[10px] text-white/60 font-bold uppercase">Total</p>
                         <p className="text-lg font-black">{fmtCurrency(order.totalValue)}</p>
@@ -167,12 +185,10 @@ export default function OrderDetailsPage() {
                         <p className="text-lg font-black">{order.totalWeight != null ? `${order.totalWeight.toFixed(2)} kg` : '—'}</p>
                     </div>
                     <div>
-                        <p className="text-[10px] text-white/60 font-bold uppercase">Criado em</p>
-                        <p className="text-sm font-semibold">{fmtDateTime(order.createdAt)}</p>
-                    </div>
-                    <div>
-                        <p className="text-[10px] text-white/60 font-bold uppercase">Entrega</p>
-                        <p className="text-sm font-semibold">{fmt(order.deliveryDate)}</p>
+                        <p className="text-[10px] text-white/60 font-bold uppercase">Tempo do Pedido</p>
+                        <p className="text-sm font-semibold">
+                            {fmtDuration(order.createdAt, order.deliveredAt)}
+                        </p>
                     </div>
                 </div>
             </div>
@@ -196,7 +212,6 @@ export default function OrderDetailsPage() {
                             </div>
                             <div className="mt-4 space-y-4">
                                 <InfoField label="Endereço" value={order.customerAddress} />
-                                <InfoField label="ID do Cliente" value={order.customerId} />
                             </div>
                         </div>
 
@@ -206,9 +221,7 @@ export default function OrderDetailsPage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <InfoField label="Vendedor" value={order.seller} />
                                 <InfoField label="Fechado por" value={order.closedBy} />
-                                <InfoField label="Usuário" value={order.user} />
                                 <InfoField label="Pagamento" value={order.paymentCondition?.replace(/_/g, ' ')} />
-                                <InfoField label="Tabela de Preço" value={order.priceTableId} />
                             </div>
                             {order.observations && (
                                 <div className="mt-4">
@@ -225,19 +238,6 @@ export default function OrderDetailsPage() {
                             </div>
                         </div>
 
-                        {/* Logística */}
-                        <div>
-                            <SectionTitle>Logística</SectionTitle>
-                            <div className="grid grid-cols-2 gap-4">
-                                <InfoField label="Veículo" value={order.assignedVehicleId} />
-                                <InfoField label="Motorista" value={order.assignedDriverId} />
-                                <InfoField label="Aceito em" value={fmtDateTime(order.acceptedAt)} />
-                                <InfoField label="Entrega Agendada" value={fmt(order.scheduledDeliveryDate)} />
-                                <InfoField label="Saída" value={fmtDateTime(order.departureTime)} />
-                                <InfoField label="Data de Entrega" value={fmt(order.deliveryDate)} />
-                                <InfoField label="Entregue em" value={fmtDateTime(order.deliveredAt)} />
-                            </div>
-                        </div>
 
                         {/* Faturamento */}
                         <div>
@@ -245,19 +245,10 @@ export default function OrderDetailsPage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <InfoField label="NF Número" value={order.nfNumero} />
                                 <InfoField label="Venda Direta Nº" value={order.vendaDiretaNumero} />
-                                <InfoField label="Faturado em" value={fmtDateTime(order.invoicedAt)} />
-                                <InfoField label="Rejeitado em" value={fmtDateTime(order.rejectedAt)} />
                             </div>
                         </div>
 
-                        {/* Controle */}
-                        <div>
-                            <SectionTitle>Controle</SectionTitle>
-                            <div className="grid grid-cols-2 gap-4">
-                                <InfoField label="Criado em" value={fmtDateTime(order.createdAt)} />
-                                <InfoField label="Atualizado em" value={fmtDateTime(order.updatedAt)} />
-                            </div>
-                        </div>
+
                     </div>
 
                     {/* ── DIREITA ── */}
@@ -274,8 +265,6 @@ export default function OrderDetailsPage() {
                                             <th className="py-2 text-right">Qtd</th>
                                             <th className="py-2 text-right">Peso</th>
                                             <th className="py-2 text-right">Unitário</th>
-                                            <th className="py-2 text-right">Desc.</th>
-                                            <th className="py-2 text-right">Final</th>
                                             <th className="py-2 text-right">Total</th>
                                             <th className="py-2 text-right">R$/kg</th>
                                         </tr>
@@ -297,11 +286,8 @@ export default function OrderDetailsPage() {
                                                     <td className="py-2.5 text-right font-semibold">{item.quantity}</td>
                                                     <td className="py-2.5 text-right text-muted-foreground">{totalWeight > 0 ? `${totalWeight.toFixed(2)} kg` : '—'}</td>
                                                     <td className="py-2.5 text-right">{fmtCurrency(item.price)}</td>
-                                                    <td className="py-2.5 text-right text-orange-500 font-bold">
-                                                        {(item.discount ?? 0) > 0 ? `${item.discount}%` : '—'}
-                                                    </td>                                                    <td className="py-2.5 text-right">{fmtCurrency(item.finalPrice)}</td>
-                                                    <td className="py-2.5 text-right font-black">{fmtCurrency(total)}</td>
-                                                    <td className="py-2.5 text-right text-muted-foreground">{pricePerKg > 0 ? fmtCurrency(pricePerKg) : '—'}</td>
+                                                    <td className="py-2.5 text-right">{fmtCurrency(item.price * item.quantity)}</td>
+                                                    <td className="py-2.5 text-right text-muted-foreground">{fmtCurrency(item.price / weightPerUnit)}</td>
                                                 </tr>
                                             );
                                         })}
@@ -331,21 +317,21 @@ export default function OrderDetailsPage() {
                             <SectionTitle>Linha do Tempo</SectionTitle>
                             <div className="space-y-2">
                                 {([
-                                    { label: 'Criado', date: order.createdAt },
-                                    { label: 'Visualizado', date: order.viewedAt },
-                                    { label: 'Aceito', date: order.acceptedAt },
-                                    { label: 'Aprovado', date: order.approvedAt },
-                                    { label: 'Saída', date: order.departureTime },
+                                    { label: 'pedido criado', date: order.createdAt },
+                                    { label: 'pedido aprovado', date: order.acceptedAt },
+                                    { label: 'Aprovado Produção', date: order.approvedAt },
+                                    { label: 'Saída entrega', date: order.departureTime },
                                     { label: 'Faturado', date: order.invoicedAt },
-                                    { label: 'Entregue', date: order.deliveredAt },
-                                    { label: 'Rejeitado', date: order.rejectedAt },
-                                    { label: 'Atualizado', date: order.updatedAt },
+                                    { label: 'Entregue finalizado', date: order.deliveredAt },
+                                    { label: 'última atualização', date: order.updatedAt },
                                 ] as { label: string; date: string | null | undefined }[])
                                     .filter(e => e.date)
                                     .map(({ label, date }) => (
                                         <div key={label} className="flex items-center gap-3">
                                             <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
-                                            <p className="text-xs text-muted-foreground w-24 shrink-0 font-bold uppercase">{label}</p>
+                                            <p className="text-xs text-muted-foreground w-40 shrink-0 font-bold uppercase">
+                                                {label}
+                                            </p>
                                             <p className="text-xs font-mono text-foreground">{fmtDateTime(date)}</p>
                                         </div>
                                     ))}

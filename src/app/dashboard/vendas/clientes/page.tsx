@@ -19,6 +19,13 @@ import * as XLSX from 'xlsx';
 import { Plus, Trash2, Edit, Save, Download, Eye } from 'lucide-react';
 import { OrderTable } from '@/components/shared';
 import { useRouter } from 'next/navigation';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 
 const emptyCustomer = {
@@ -156,7 +163,12 @@ export default function ConfiguracoesPage() {
     const confirmDelete = (type: string, id: string, name: string) => setDeleteTarget({ type, id, name });
 
 
-
+    const customersTableData = customers.map(c => ({
+        ...c,
+        customerName: c.name,
+        customerCpfCnpj: c.cpfcnpj,
+        customerPhone: c.phone,
+    }));
 
 
 
@@ -185,7 +197,7 @@ export default function ConfiguracoesPage() {
 
 
             <OrderTable
-                orders={customers as any}
+                orders={customersTableData as any}
                 showSearch
                 columns={[
                     {
@@ -233,7 +245,7 @@ export default function ConfiguracoesPage() {
                                 variant="outline"
                                 className="text-[8px] font-black uppercase px-2 h-5 flex items-center justify-center"
                             >
-                                {c.status}
+                                {c.status || '---'}
                             </Badge>
                         ),
                     },
@@ -322,13 +334,23 @@ export default function ConfiguracoesPage() {
                                             className="h-9 text-xs"
                                             disabled={loading}
                                         />
-                                        <Input
-                                            placeholder="Status (Ativo/Inativo)"
-                                            value={customerData.status || ''}
-                                            onChange={e => setCustomerData({ ...customerData, status: e.target.value })}
-                                            className="h-9 text-xs"
+                                        <Select
+                                            value={customerData.status || 'ATIVO'}
+                                            onValueChange={(value) =>
+                                                setCustomerData({ ...customerData, status: value })
+                                            }
                                             disabled={loading}
-                                        />
+                                        >
+                                            <SelectTrigger className="h-9 text-xs">
+                                                <SelectValue placeholder="Status" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="ATIVO">Ativo</SelectItem>
+                                                <SelectItem value="INATIVO">Inativo</SelectItem>
+                                                <SelectItem value="PERDIDO">Perdido</SelectItem>
+                                                <SelectItem value="RECUPERADO">Recuperado</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
 
                                     <Input

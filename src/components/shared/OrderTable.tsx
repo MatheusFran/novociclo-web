@@ -165,7 +165,7 @@ export function OrderTable({
           (o.id || '').toLowerCase().includes(search.toLowerCase())) &&
         (statusFilter === 'ALL' || o.status === statusFilter) &&
         (sellerFilter === 'ALL' || o.seller === sellerFilter) &&
-        (closingPersonFilter === 'ALL' || (o as any).closingPerson === closingPersonFilter) &&
+        (closingPersonFilter === 'ALL' || o.closedBy === closingPersonFilter) &&
         (!dateRange.from || orderDate >= new Date(dateRange.from)) &&
         (!dateRange.to || orderDate <= new Date(dateRange.to))
       );
