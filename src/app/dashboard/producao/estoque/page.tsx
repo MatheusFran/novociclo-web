@@ -55,7 +55,7 @@ export default function EstoqueLogisticaPage() {
     const [formProductId, setFormProductId] = useState('');
     const [formQuantity, setFormQuantity] = useState('');
     const [formUnitCost, setFormUnitCost] = useState('');
-    const [formReason, setFormReason] = useState<'COMPRA' | 'DEVOLUCAO' | 'AJUSTE'>('COMPRA');
+    const [formReason, setFormReason] = useState('');
     const [isLoadingEntrada, setIsLoadingEntrada] = useState(false);
 
     // Estados do formulário de saída
@@ -106,38 +106,10 @@ export default function EstoqueLogisticaPage() {
     }, [isReady]);
 
     // ── Calcular movimentações de estoque ──
-    // Combina API com saídas automáticas de pedidos aprovados
+    // Usa apenas movimentações da API (saídas automáticas são criadas lá)
     const movimentacoes = useMemo(() => {
-        let movs: StockMovement[] = [...movimentacoesAPI];
-
-        // Adicionar saídas automáticas de pedidos aprovados em PRONTO_LOGISTICA (se não existirem)
-        const apiIds = new Set(movimentacoesAPI.map(m => m.id));
-
-        orders.forEach(order => {
-            if (order.status === 'PRONTO_LOGISTICA' && order.productionStage === 'CONCLUIDO') {
-                order.items.forEach((item: any) => {
-                    const autoId = `${order.id}-${item.productId}`;
-                    if (!apiIds.has(autoId)) {
-                        const prod = products.find(p => p.id === item.productId);
-                        movs.push({
-                            id: autoId,
-                            productId: item.productId,
-                            productName: prod?.name || item.productId,
-                            type: 'SAIDA',
-                            quantity: item.quantity,
-                            unitCost: item.price,
-                            totalCost: item.price * item.quantity,
-                            reason: `Produção - Pedido ${order.id}`,
-                            relatedOrderId: order.id,
-                            date: (order as any).approvedAt,
-                        });
-                    }
-                });
-            }
-        });
-
-        return movs.sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
-    }, [movimentacoesAPI, orders, products]);
+        return [...movimentacoesAPI].sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
+    }, [movimentacoesAPI]);
 
     // ── Calcular saldo atual (baseado em movimentações) ──
     const saldoEstoque = useMemo(() => {
@@ -498,7 +470,6 @@ export default function EstoqueLogisticaPage() {
                                             <th className="text-[9px] font-black uppercase text-left px-4 py-3">Produto</th>
                                             <th className="text-[9px] font-black uppercase text-center px-4 py-3">Tipo</th>
                                             <th className="text-[9px] font-black uppercase text-center px-4 py-3">Quantidade</th>
-                                            <th className="text-[9px] font-black uppercase text-center px-4 py-3 hidden md:table-cell">Custo Unit.</th>
                                             <th className="text-[9px] font-black uppercase text-center px-4 py-3">Motivo</th>
                                             <th className="text-[9px] font-black uppercase text-center px-4 py-3">Data</th>
                                         </tr>
@@ -513,9 +484,7 @@ export default function EstoqueLogisticaPage() {
                                                     </Badge>
                                                 </td>
                                                 <td className="px-4 py-3 text-center text-[11px] font-black">{mov.quantity}</td>
-                                                <td className="px-4 py-3 text-center text-[9px] text-muted-foreground font-mono hidden md:table-cell">
-                                                    R$ {mov.unitCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                                                </td>
+                                              
                                                 <td className="px-4 py-3 text-[9px] text-muted-foreground">{mov.reason}</td>
                                                 <td className="px-4 py-3 text-center text-[9px] font-bold text-muted-foreground">
                                                     {format(new Date(mov.date), 'dd/MM/yyyy HH:mm')}
@@ -571,31 +540,16 @@ export default function EstoqueLogisticaPage() {
                             />
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-black uppercase text-muted-foreground">Custo Unitário (R$) *</label>
-                            <Input
-                                type="number"
-                                placeholder="0.00"
-                                className="h-9 text-xs font-bold"
-                                value={formUnitCost}
-                                onChange={e => setFormUnitCost(e.target.value)}
-                                min="0"
-                                step="0.01"
-                            />
-                        </div>
+
 
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase text-muted-foreground">Motivo</label>
-                            <Select value={formReason} onValueChange={(v) => setFormReason(v as typeof formReason)}>
-                                <SelectTrigger className="h-9 text-xs">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="COMPRA">Compra</SelectItem>
-                                    <SelectItem value="DEVOLUCAO">Devolução</SelectItem>
-                                    <SelectItem value="AJUSTE">Ajuste</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <Input
+                                placeholder="Digite o motivo"
+                                className="h-9 text-xs font-bold"
+                                value={formReason}
+                                onChange={e => setFormReason(e.target.value)}
+                            />
                         </div>
                     </div>
 
