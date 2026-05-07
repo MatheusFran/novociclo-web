@@ -62,7 +62,7 @@ export default function EstoqueLogisticaPage() {
     const [isSaidaOpen, setIsSaidaOpen] = useState(false);
     const [saidaProductId, setSaidaProductId] = useState('');
     const [saidaQuantity, setSaidaQuantity] = useState('');
-    const [saidaReason, setSaidaReason] = useState('VENDA');
+    const [saidaReason, setSaidaReason] = useState('');
     const [isLoadingSaida, setIsLoadingSaida] = useState(false);
 
     // Estados das movimentações
@@ -162,7 +162,7 @@ export default function EstoqueLogisticaPage() {
 
     // ── Handler para entrada manual ──
     const handleAddStockEntry = async () => {
-        if (!formProductId || !formQuantity || !formUnitCost) {
+        if (!formProductId || !formQuantity) {
             toast({ variant: "destructive", title: "Erro", description: "Preencha todos os campos." });
             return;
         }
@@ -260,7 +260,7 @@ export default function EstoqueLogisticaPage() {
             toast({ title: "Sucesso", description: `${quantity} unidades removidas do estoque.` });
             setSaidaProductId('');
             setSaidaQuantity('');
-            setSaidaReason('VENDA');
+            setSaidaReason('');
             setIsSaidaOpen(false);
         } catch (error) {
             console.error('Erro:', error);
@@ -621,17 +621,12 @@ export default function EstoqueLogisticaPage() {
 
                         <div className="space-y-2">
                             <label className="text-[10px] font-black uppercase text-muted-foreground">Motivo</label>
-                            <Select value={saidaReason} onValueChange={setSaidaReason}>
-                                <SelectTrigger className="h-9 text-xs">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="VENDA">Venda</SelectItem>
-                                    <SelectItem value="DEVOLVIDO">Devolvido</SelectItem>
-                                    <SelectItem value="DANIFICADO">Danificado</SelectItem>
-                                    <SelectItem value="AJUSTE">Ajuste</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <Input
+                                placeholder="Digite o motivo"
+                                className="h-9 text-xs font-bold"
+                                value={saidaReason}
+                                onChange={e => setSaidaReason(e.target.value)}
+                            />
                         </div>
                     </div>
 
