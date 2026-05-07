@@ -90,6 +90,14 @@ export default function LogisticaPage() {
   const [isVisualizarOpen, setIsVisualizarOpen] = useState(false);
   const [visualizarOrderId, setVisualizarOrderId] = useState<string | null>(null);
 
+  const [isIniciarEntregaOpen, setIsIniciarEntregaOpen] = useState(false);
+  const [iniciarEntregaOrders, setIniciarEntregaOrders] = useState<string[]>([]);
+  const [dataIniciarEntrega, setDataIniciarEntrega] = useState('');
+
+  const [isConfirmarEntregaOpen, setIsConfirmarEntregaOpen] = useState(false);
+  const [confirmarEntregaOrderId, setConfirmarEntregaOrderId] = useState<string | null>(null);
+  const [dataConfirmarEntrega, setDataConfirmarEntrega] = useState('');
+
   const [histSearch, setHistSearch] = useState('');
   const [histStatus, setHistStatus] = useState('ALL');
   const [histCidade, setHistCidade] = useState('ALL');
@@ -238,23 +246,56 @@ export default function LogisticaPage() {
     }
   };
 
-  const handleIniciarEntrega = async (orderIds: string[]) => {
+  const handleIniciarEntrega = (orderIds: string[]) => {
+    setIniciarEntregaOrders(orderIds);
+    setDataIniciarEntrega('');
+    setIsIniciarEntregaOpen(true);
+  };
+
+  const confirmarIniciarEntrega = async () => {
+    if (!dataIniciarEntrega) {
+      toast({
+        variant: 'destructive',
+        title: 'Data obrigatória',
+        description: 'Selecione a data de saída para iniciar a entrega.',
+      });
+      return;
+    }
     try {
-      const departureTime = new Date().toISOString();
-      orderIds.forEach(id => {
+      const departureTime = new Date(dataIniciarEntrega).toISOString();
+      iniciarEntregaOrders.forEach(id => {
         updateOrderStatus(id, 'ENTREGA', { departureTime } as any);
       });
-      setRomaneioOrders(orderIds);
-      toast({ title: 'Entrega Iniciada', description: `${orderIds.length} pedido(s) em rota.` });
+      setRomaneioOrders(iniciarEntregaOrders);
+      toast({ title: 'Entrega Iniciada', description: `${iniciarEntregaOrders.length} pedido(s) em rota.` });
+      setIsIniciarEntregaOpen(false);
+      setDataIniciarEntrega('');
     } catch {
       toast({ variant: 'destructive', title: 'Erro', description: 'Falha ao iniciar entrega.' });
     }
   };
 
-  const handleConfirmarEntrega = async (orderId: string) => {
+  const handleConfirmarEntrega = (orderId: string) => {
+    setConfirmarEntregaOrderId(orderId);
+    setDataConfirmarEntrega('');
+    setIsConfirmarEntregaOpen(true);
+  };
+
+  const confirmarEntregaComData = async () => {
+    if (!confirmarEntregaOrderId || !dataConfirmarEntrega) {
+      toast({
+        variant: 'destructive',
+        title: 'Data obrigatória',
+        description: 'Selecione a data de entrega para confirmar.',
+      });
+      return;
+    }
     try {
-      await confirmDelivery(orderId);
-      toast({ title: 'Entrega Confirmada', description: `Pedido ${orderId} finalizado.` });
+      await confirmDelivery(confirmarEntregaOrderId);
+      toast({ title: 'Entrega Confirmada', description: `Pedido ${confirmarEntregaOrderId} finalizado.` });
+      setIsConfirmarEntregaOpen(false);
+      setDataConfirmarEntrega('');
+      setConfirmarEntregaOrderId(null);
     } catch {
       toast({ variant: 'destructive', title: 'Erro', description: 'Falha ao confirmar entrega.' });
     }
@@ -765,6 +806,89 @@ export default function LogisticaPage() {
           },
         ]}
       />
+
+      {/* ══ MODAL: INICIAR ENTREGA COM DATA ══ */}
+      <Dialog open={isIniciarEntregaOpen} onOpenChange={setIsIniciarEntregaOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-black uppercase flex items-center gap-2">
+              <PlayCircle className="w-4 h-4 text-green-500" /> Iniciar Entrega
+            </DialogTitle>
+            <DialogDescription className="text-[10px] uppercase font-bold">
+              {iniciarEntregaOrders.length} pedido(s) · Selecione a data de saída
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase text-muted-foreground">
+                Data e Hora de Saída *
+              </label>
+              <Input
+                type="datetime-local"
+                className="h-9 text-xs"
+                value={dataIniciarEntrega}
+                onChange={e => setDataIniciarEntrega(e.target.value)}
+              />
+              <p className="text-[9px] text-muted-foreground">Defina quando a entrega foi iniciada</p>
+            </div>
+            {iniciarEntregaOrders.length > 0 && (
+              <div className="bg-muted/30 rounded-lg p-3 space-y-1 max-h-32 overflow-y-auto">
+                <p className="text-[9px] font-black uppercase text-muted-foreground pb-2">Pedidos</p>
+                {orders.filter(o => iniciarEntregaOrders.includes(o.id)).map(o => (
+                  <div key={o.id} className="flex justify-between text-[10px] font-bold">
+                    <span>{o.id} — {o.customerName}</span>
+                    <span className="text-muted-foreground">{calcSacos(o)} un</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsIniciarEntregaOpen(false)} className="font-bold text-xs uppercase">
+              Cancelar
+            </Button>
+            <Button onClick={confirmarIniciarEntrega} className="font-black text-xs uppercase gap-2 bg-green-500 hover:bg-green-400">
+              <PlayCircle className="w-3.5 h-3.5" /> Iniciar Entrega
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ══ MODAL: CONFIRMAR ENTREGA COM DATA ══ */}
+      <Dialog open={isConfirmarEntregaOpen} onOpenChange={setIsConfirmarEntregaOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-black uppercase flex items-center gap-2">
+              <CheckSquare className="w-4 h-4 text-green-500" /> Confirmar Entrega
+            </DialogTitle>
+            <DialogDescription className="text-[10px] uppercase font-bold">
+              Pedido {confirmarEntregaOrderId} · Selecione a data de entrega
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase text-muted-foreground">
+                Data e Hora de Entrega *
+              </label>
+              <Input
+                type="datetime-local"
+                className="h-9 text-xs"
+                value={dataConfirmarEntrega}
+                onChange={e => setDataConfirmarEntrega(e.target.value)}
+              />
+              <p className="text-[9px] text-muted-foreground">Defina quando a entrega foi concluída</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsConfirmarEntregaOpen(false)} className="font-bold text-xs uppercase">
+              Cancelar
+            </Button>
+            <Button onClick={confirmarEntregaComData} className="font-black text-xs uppercase gap-2 bg-green-500 hover:bg-green-400">
+              <CheckSquare className="w-3.5 h-3.5" /> Confirmar Entrega
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
