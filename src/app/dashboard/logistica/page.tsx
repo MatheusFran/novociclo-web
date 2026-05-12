@@ -343,6 +343,33 @@ export default function LogisticaPage() {
     return cargasMontadas.find(c => c.grupo === romaneioGrupo)?.pedidos || [];
   }, [cargasMontadas, romaneioGrupo]);
 
+  const consolidatedRomaneioData = useMemo(() => {
+    if (romaneioData.length === 0) return [];
+    
+    const productMap: Record<string, { name: string; totalQuantity: number; totalWeight: number; productId: string }> = {};
+    
+    romaneioData.forEach(order => {
+      order.items.forEach((item: any) => {
+        const prod = products.find((p: any) => p.id === item.productId);
+        const prodName = prod?.name || item.productId;
+        
+        if (!productMap[prodName]) {
+          productMap[prodName] = {
+            name: prodName,
+            totalQuantity: 0,
+            totalWeight: 0,
+            productId: item.productId,
+          };
+        }
+        
+        productMap[prodName].totalQuantity += item.quantity;
+        productMap[prodName].totalWeight += (prod?.weight || 0) * item.quantity;
+      });
+    });
+    
+    return Object.values(productMap).sort((a, b) => a.name.localeCompare(b.name));
+  }, [romaneioData, products]);
+
   const abrirRomaneio = (grupo: string) => {
     setRomaneioGrupo(grupo);
     setIsRomaneioOpen(true);
@@ -888,57 +915,34 @@ export default function LogisticaPage() {
                       )}
                     </div>
                   )}
-                  {romaneioData.map((order, idx) => (
-                    <div key={order.id} className={`space-y-3 ${idx > 0 ? 'border-t pt-4' : ''}`}>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-xs font-black uppercase">{order.customerName}</p>
-                          <p className="text-[10px] font-bold text-muted-foreground flex items-center gap-1">
-                            <MapPin className="w-3 h-3" /> {order.city} — {order.customerAddress || 'Endereço não informado'}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[9px] font-black uppercase text-muted-foreground">Pedido</p>
-                          <p className="text-xs font-black font-mono text-primary">{order.id}</p>
-                        </div>
-                      </div>
-                      <table className="w-full border-collapse text-xs">
-                        <thead>
-                          <tr className="border-b border-zinc-200">
-                            <th className="text-left text-[9px] font-black uppercase text-muted-foreground pb-1">Produto</th>
-                            <th className="text-center text-[9px] font-black uppercase text-muted-foreground pb-1 w-20">Qtd</th>
-                            <th className="text-right text-[9px] font-black uppercase text-muted-foreground pb-1 w-24">Peso Total</th>
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-black uppercase text-muted-foreground">Resumo de Produtos</h3>
+                    <table className="w-full border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b-2 border-zinc-300">
+                          <th className="text-left text-[9px] font-black uppercase text-muted-foreground pb-2">Produto</th>
+                          <th className="text-center text-[9px] font-black uppercase text-muted-foreground pb-2 w-20">Qtd</th>
+                          <th className="text-right text-[9px] font-black uppercase text-muted-foreground pb-2 w-24">Peso Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {consolidatedRomaneioData.map((item, idx) => (
+                          <tr key={item.productId || idx} className="border-b border-zinc-50">
+                            <td className="py-2 font-bold uppercase text-[11px]">{item.name}</td>
+                            <td className="py-2 text-center font-black text-[11px]">{item.totalQuantity}</td>
+                            <td className="py-2 text-right font-black text-[11px]">{item.totalWeight.toFixed(2)} kg</td>
                           </tr>
-                        </thead>
-                        <tbody>
-                          {order.items.map((item: any) => {
-                            const prod = products.find((p: any) => p.id === item.productId);
-                            return (
-                              <tr key={item.productId} className="border-b border-zinc-50">
-                                <td className="py-1.5 font-bold uppercase text-[11px]">{prod?.name || item.productId}</td>
-                                <td className="py-1.5 text-center font-black text-[11px]">{item.quantity}</td>
-                                <td className="py-1.5 text-right font-black text-[11px]">{((prod?.weight || 0) * item.quantity).toFixed(2)} kg</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                        <tfoot>
-                          <tr className="border-t-2 border-zinc-300">
-                            <td className="pt-2 text-[9px] font-black uppercase text-muted-foreground">Total</td>
-                            <td className="pt-2 text-center font-black text-[11px]">{calcSacos(order)}</td>
-                            <td className="pt-2 text-right font-black text-[11px]">{calcPeso(order).toFixed(2)} kg</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                      <div className="flex justify-end mt-2">
-                        <div className="w-48 text-center">
-                          <div className="border-t border-zinc-300 pt-1">
-                            <p className="text-[8px] font-black uppercase text-muted-foreground">Assinatura do Recebedor</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-zinc-300">
+                          <td className="pt-2 text-[9px] font-black uppercase text-muted-foreground">Total</td>
+                          <td className="pt-2 text-center font-black text-[11px]">{consolidatedRomaneioData.reduce((a, p) => a + p.totalQuantity, 0)}</td>
+                          <td className="pt-2 text-right font-black text-[11px]">{consolidatedRomaneioData.reduce((a, p) => a + p.totalWeight, 0).toFixed(2)} kg</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 </>
               )}
             </div>
