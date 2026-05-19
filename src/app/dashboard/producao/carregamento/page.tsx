@@ -295,34 +295,59 @@ export default function CarregamentoPage() {
   // Usar carregamentos direto do store
   const charges = useMemo(() => {
     if (!carregamentos || carregamentos.length === 0) return [];
-    
-    return carregamentos.map(c => ({
-      id: c.id,
-      chargeNumber: `CRG-${format(new Date(c.createdAt), 'ddMMyy')}-${String(Math.abs(c.id.charCodeAt(0) % 1000)).padStart(3, '0')}`,
-      grupoCarga: c.grupoCarga,
-      cityGroups: [] as CityGroup[],
-      routes: c.orderIds.map((orderId, idx) => ({
-        id: `route_${orderId}_${idx}`,
-        destination: '—',
-        orders: [orderId],
+
+    return carregamentos.map(c => {
+      const cityGroups = (c as any).cityGroups || [];
+
+      const totalPalets = cityGroups.reduce(
+        (sum: number, cg: any) => sum + (cg.palets?.length || 0),
+        0
+      );
+
+      // Pegar orderIds que estão em cityGroups (paletizados)
+      const paletizedOrderIds = new Set<string>();
+      cityGroups.forEach((cg: any) => {
+        cg.orders?.forEach((orderId: string) => paletizedOrderIds.add(orderId));
+      });
+      // Rotas são apenas os orderIds que NÃO estão em cityGroups
+      const allOrderIds: string[] = (c as any).orderIds || [];
+      const routeOrderIds = allOrderIds.filter((id: string) => !paletizedOrderIds.has(id));
+      return {
+        id: c.id,
+        chargeNumber: `CRG-${format(new Date(c.createdAt), 'ddMMyy')}-${String(
+          Math.abs(c.id.charCodeAt(0) % 1000)
+        ).padStart(3, '0')}`,
+        grupoCarga: c.grupoCarga,
+        cityGroups: cityGroups as CityGroup[],
+        routes: routeOrderIds.map((orderId, idx) => ({
+          id: `route_${orderId}_${idx}`,
+          destination: '—',
+          orders: [orderId],
+          totalWeightKg: c.totalPeso,
+          totalUnits: Math.round(c.totalSacos),
+        })),
         totalWeightKg: c.totalPeso,
-        totalUnits: Math.round(c.totalSacos),
-      })),
-      totalWeightKg: c.totalPeso,
-      totalPalets: 0,
-      totalRoutes: c.orderIds.length,
-      createdAt: c.createdAt,
-      observations: '',
-    })) as LoadingCharge[];
+        totalPalets,
+        totalRoutes: routeOrderIds.length,
+        createdAt: c.createdAt,
+        observations: (c as any).observations || '',
+      };
+    }) as LoadingCharge[];
   }, [carregamentos]);
 
-  // ── Pedidos disponíveis (AGUARDANDO_FATURAMENTO não alocados)
   const allocatedIds = useMemo(() => {
     const ids = new Set<string>();
+
     charges.forEach(c => {
-      c.cityGroups?.forEach(cg => cg.orders.forEach(id => ids.add(id)));
-      c.routes?.forEach(r => r.orders.forEach(id => ids.add(id)));
+      c.cityGroups?.forEach(cg =>
+        cg.orders.forEach(id => ids.add(id))
+      );
+
+      c.routes?.forEach(r =>
+        r.orders.forEach(id => ids.add(id))
+      );
     });
+
     return ids;
   }, [charges]);
 
@@ -477,6 +502,8 @@ export default function CarregamentoPage() {
         totalSacos,
         totalPeso: paletWeight_total + batidaWeight_total,
         totalValor,
+        cityGroups,
+        observations,
       });
 
       toast({ title: 'Carga fechada!', description: `${activeGrupo}` });
@@ -552,6 +579,75 @@ export default function CarregamentoPage() {
     const html = `<!DOCTYPE html><html><head><title>Romaneio ${charge.chargeNumber}</title><style>body{font-family:monospace;margin:24px;}h3,h4{border-bottom:1px solid #ccc;padding-bottom:4px;}@media print{button{display:none}}</style></head><body><h1>ROMANEIO DE CARGA</h1><p>${charge.chargeNumber} · ${format(new Date(charge.createdAt), 'dd/MM/yyyy HH:mm')} · ${charge.totalWeightKg.toFixed(1)} kg</p>${body}<button onclick="window.print()" style="margin-top:16px;padding:8px 20px;">🖨️ Imprimir</button></body></html>`;
     const win = window.open('', '_blank');
     win?.document.write(html); win?.document.close();
+  };
+
+  const printPaletDetails = (palet: Palet, city: string, chargeNumber: string, grupoCarga: string) => {
+    const clientNames = [...new Set(palet.items.flatMap(i => i.clients.map(c => c.customerName)))].join(', ');
+    const weight = paletWeight(palet, products);
+    const units = paletUnits(palet);
+
+    let itemsBody = '';
+    palet.items.forEach(item => {
+      const prod = products.find((p: any) => p.id === item.productId);
+      const qty = item.clients.reduce((s, c) => s + c.quantity, 0);
+      itemsBody += `<tr>
+        <td style="padding:8px;border:1px solid #ddd;font-size:11px;font-weight:700;">${prod?.name || item.productId}</td>
+        <td style="padding:8px;border:1px solid #ddd;font-size:11px;text-align:center;font-weight:700;">${qty}</td>
+        <td style="padding:8px;border:1px solid #ddd;font-size:10px;">
+          ${item.clients.map(c => `<div>${c.customerName}: ${c.quantity} un</div>`).join('')}
+        </td>
+        <td style="padding:8px;border:1px solid #ddd;font-size:11px;text-align:right;font-weight:700;">${prodWeight(products, item.productId, qty).toFixed(1)} kg</td>
+      </tr>`;
+    });
+
+    const html = `<!DOCTYPE html><html><head><title>Palete ${String(palet.number).padStart(3, '0')} - ${chargeNumber}</title><style>
+      body { font-family: monospace; margin: 20px; }
+      .header { border: 3px solid #222; padding: 16px; margin-bottom: 20px; }
+      .header h1 { font-size: 22px; margin: 0 0 8px 0; }
+      .header p { margin: 4px 0; font-size: 12px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      thead { background: #222; color: #fff; }
+      thead th { padding: 8px; font-size: 11px; text-align: left; font-weight: 700; }
+      tbody td { padding: 8px; border: 1px solid #ddd; }
+      .summary { margin-top: 12px; font-size: 12px; font-weight: 700; padding: 12px; background: #f0f0f0; border-radius: 4px; }
+      .footer { margin-top: 20px; text-align: center; }
+      button { padding: 10px 20px; cursor: pointer; font-size: 12px; }
+      @media print { button { display: none; } }
+    </style></head><body>
+      <div class="header">
+        <h1>PALETE ${String(palet.number).padStart(3, '0')}</h1>
+        <p><strong>Carga:</strong> ${chargeNumber}</p>
+        <p><strong>Grupo:</strong> ${grupoCarga}</p>
+        <p><strong>Destino:</strong> 📍 ${city}</p>
+        <p><strong>Clientes:</strong> ${clientNames}</p>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Produto</th>
+            <th style="text-align: center;">Quantidade</th>
+            <th>Detalhes por Cliente</th>
+            <th style="text-align: right;">Peso (kg)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsBody}
+        </tbody>
+      </table>
+
+      <div class="summary">
+        <p>Total: ${units} unidades · ${weight.toFixed(1)} kg</p>
+      </div>
+
+      <div class="footer">
+        <button onclick="window.print()">🖨️ Imprimir</button>
+      </div>
+    </body></html>`;
+
+    const win = window.open('', '_blank');
+    win?.document.write(html);
+    win?.document.close();
   };
 
   if (!isReady) return null;
@@ -978,9 +1074,19 @@ export default function CarregamentoPage() {
                                       const clients = [...new Set(p.items.flatMap(i => i.clients.map(c => c.customerName)))].join(', ');
                                       return (
                                         <div key={p.id} className="border border-blue-200 rounded-lg p-2 bg-blue-50/30">
-                                          <div className="flex justify-between mb-1">
-                                            <p className="text-[10px] font-black text-blue-700">Palete {String(p.number).padStart(3, '0')}</p>
-                                            <p className="text-[9px] text-muted-foreground">{paletUnits(p)} un · {paletWeight(p, products).toFixed(1)} kg</p>
+                                          <div className="flex justify-between items-start gap-2 mb-1">
+                                            <div>
+                                              <p className="text-[10px] font-black text-blue-700">Palete {String(p.number).padStart(3, '0')}</p>
+                                              <p className="text-[9px] text-muted-foreground">{paletUnits(p)} un · {paletWeight(p, products).toFixed(1)} kg</p>
+                                            </div>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              className="h-6 px-2 text-[9px] font-bold text-blue-600 hover:text-blue-800 shrink-0"
+                                              onClick={() => printPaletDetails(p, cg.city, charge.chargeNumber, charge.grupoCarga)}
+                                            >
+                                              <Printer className="w-3 h-3" />
+                                            </Button>
                                           </div>
                                           <p className="text-[8px] text-muted-foreground">{clients}</p>
                                         </div>

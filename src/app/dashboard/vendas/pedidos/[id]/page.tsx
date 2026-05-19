@@ -82,7 +82,12 @@ export default function OrderDetailsPage() {
     const [vendaDireta, setVendaDireta] = useState('');
     const [processing, setProcessing] = useState(false);
 
+    // ── Cancelamento
+    const [cancelarOpen, setCancelarOpen] = useState(false);
+    const [cancelReason, setCancelReason] = useState('');
+
     const openFaturar = () => { setNfNumero(''); setVendaDireta(''); setFaturarOpen(true); };
+    const openCancelar = () => { setCancelReason(''); setCancelarOpen(true); };
 
     const handleConfirmFaturar = async () => {
         if (!vendaDireta.trim()) {
@@ -111,6 +116,26 @@ export default function OrderDetailsPage() {
             toast({ variant: 'destructive', title: 'Pedido rejeitado.' });
         } catch {
             toast({ variant: 'destructive', title: 'Erro ao rejeitar pedido.' });
+        }
+    };
+
+    const handleConfirmCancelar = async () => {
+        if (!cancelReason.trim()) {
+            toast({ variant: 'destructive', title: 'Informe o motivo do cancelamento.' });
+            return;
+        }
+        setProcessing(true);
+        try {
+            await updateOrderStatus(order!.id, 'REJEITADO', {
+                canceledAt: new Date().toISOString(),
+                observations: cancelReason.trim(),
+            } as any);
+            toast({ title: 'Pedido REJEITADO com sucesso.' });
+            setCancelarOpen(false);
+        } catch {
+            toast({ variant: 'destructive', title: 'Erro ao cancelar pedido.' });
+        } finally {
+            setProcessing(false);
         }
     };
 
@@ -167,10 +192,15 @@ export default function OrderDetailsPage() {
                         {statusLabel}
                     </span>
                 </div>
-                {order.status === 'AGUARDANDO_FATURAMENTO' && (
+                {order.status !== 'ENTREGUE' && (
                     <div className="flex gap-2 pl-10">
-                        <Button size="sm" className="gap-1.5 text-xs font-black uppercase h-8 bg-green-500 hover:bg-green-400 text-white" onClick={openFaturar}>
-                            <ShieldCheck className="w-3.5 h-3.5" /> Faturar Pedido
+                        {order.status === 'AGUARDANDO_FATURAMENTO' && (
+                            <Button size="sm" className="gap-1.5 text-xs font-black uppercase h-8 bg-green-500 hover:bg-green-400 text-white" onClick={openFaturar}>
+                                <ShieldCheck className="w-3.5 h-3.5" /> Faturar Pedido
+                            </Button>
+                        )}
+                        <Button size="sm" className="gap-1.5 text-xs font-black uppercase h-8 bg-gray-600 hover:bg-gray-700 text-white" onClick={openCancelar}>
+                            <ShieldAlert className="w-3.5 h-3.5" /> Cancelar Pedido
                         </Button>
                     </div>
                 )}
@@ -394,6 +424,61 @@ export default function OrderDetailsPage() {
                         </Button>
                         <Button size="sm" className="gap-2 font-black text-xs uppercase bg-green-600 hover:bg-green-700" onClick={handleConfirmFaturar} disabled={processing}>
                             {processing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><ShieldCheck className="w-3.5 h-3.5" /> Confirmar Faturamento</>}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* ── DIALOG CANCELAMENTO ── */}
+            <Dialog open={cancelarOpen} onOpenChange={v => !processing && setCancelarOpen(v)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="font-black uppercase text-sm flex items-center gap-2">
+                            <ShieldAlert className="w-4 h-4 text-gray-600" /> Cancelar Pedido
+                        </DialogTitle>
+                        <DialogDescription className="text-[10px] font-bold uppercase text-muted-foreground">
+                            {order.id} · {order.customerName}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <div className="bg-muted/30 rounded-lg px-4 py-3 flex justify-between items-center border">
+                            <div>
+                                <p className="text-[9px] font-black uppercase text-muted-foreground">Cliente</p>
+                                <p className="text-xs font-black uppercase">{order.customerName}</p>
+                                <p className="text-[9px] font-bold text-muted-foreground">{order.city}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[9px] font-black uppercase text-muted-foreground">Valor Total</p>
+                                <p className="text-lg font-black text-primary">{fmtCurrency(order.totalValue)}</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black uppercase text-muted-foreground flex items-center gap-1.5">
+                                <FileText className="w-3 h-3" /> Motivo da Rejeição <span className="text-red-500">*</span>
+                            </label>
+                            <Input
+                                placeholder="Ex: Cliente solicitou cancelamento, erro no pedido, etc."
+                                className="h-9 text-xs font-bold"
+                                value={cancelReason}
+                                onChange={e => setCancelReason(e.target.value)}
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className="bg-red-50 border border-red-100 rounded-lg px-4 py-3">
+                            <p className="text-[9px] font-black uppercase text-red-700 mb-0.5">Aviso</p>
+                            <p className="text-xs font-semibold text-red-800">Esta ação marcará o pedido como REJEITADO e não poderá ser desfeita imediatamente. O motivo será registrado em observações.</p>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="gap-2">
+                        <Button variant="ghost" size="sm" className="font-bold text-xs uppercase" onClick={() => setCancelarOpen(false)} disabled={processing}>
+                            Manter Pedido
+                        </Button>
+                        <Button size="sm" className="gap-2 font-black text-xs uppercase bg-red-600 hover:bg-red-700" onClick={handleConfirmCancelar} disabled={processing}>
+                            {processing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><ShieldAlert className="w-3.5 h-3.5" /> Confirmar Rejeição</>}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -66,7 +66,9 @@ const STATUS_MAP: Record<OrderStatus, { label: string; color: string; icon: any 
   AGUARDANDO_FATURAMENTO: { label: 'Financeiro', color: 'bg-indigo-100 text-indigo-800 border-indigo-200', icon: CreditCard },
   FATURADO: { label: 'Faturado', color: 'bg-green-100 text-green-800 border-green-200', icon: FileText },
   ENTREGUE: { label: 'Entregue', color: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle2 },
+
   REJEITADO: { label: 'Rejeitado', color: 'bg-red-100 text-red-800 border-red-200', icon: AlertCircle },
+  CANCELADO: { label: 'Cancelado', color: 'bg-gray-100 text-gray-800 border-gray-200', icon: Trash2 },
 };
 
 

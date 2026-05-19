@@ -25,6 +25,7 @@ export type OrderStatus =
   | 'AGUARDANDO_FATURAMENTO'
   | 'FATURADO'
   | 'REJEITADO'
+  | 'CANCELADO'
   | 'ENTREGUE';
 
 export type ProductionStage = 'FILA' | 'CONCLUIDO';
@@ -305,8 +306,39 @@ export interface Carregamento {
   totalSacos: number;
   totalPeso: number;
   totalValor: number;
+  observations?: string | null;
+  cityGroups?: any[];
+  romaneio?: any;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Palet {
+  id: string;
+  carregamentoId: string;
+  number: number;
+  city: string;
+  items: Array<{
+    productId: string;
+    clients: Array<{
+      orderId: string;
+      customerName: string;
+      quantity: number;
+    }>;
+  }>;
+  totalWeight: number;
+  totalUnits: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaletHistory {
+  id: string;
+  carregamentoId: string;
+  paletId?: string;
+  action: 'CRIADO' | 'MODIFICADO' | 'FINALIZADO';
+  details: any;
+  createdAt: string;
 }
 
 export interface SalesGoal {

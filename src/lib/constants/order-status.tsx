@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle, CheckCircle2, Clock, CreditCard, Package, Truck } from 'lucide-react';
+import { AlertCircle, CheckCircle, CheckCircle2, Clock, CreditCard, Package, Truck, XCircle } from 'lucide-react';
 import { OrderStatus } from '@/lib/types';
 
 export const ORDER_STATUS_MAP: Record<OrderStatus, { label: string; color: string; icon: typeof Clock }> = {
@@ -13,5 +13,10 @@ export const ORDER_STATUS_MAP: Record<OrderStatus, { label: string; color: strin
         label: 'Entregue',
         color: 'bg-green-100 text-green-800 border-green-200',
         icon: CheckCircle
+    },
+    CANCELADO: {
+        label: 'Cancelado',
+        color: 'bg-red-100 text-red-800 border-red-200',
+        icon: XCircle
     },
 };

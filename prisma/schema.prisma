@@ -231,8 +231,43 @@ model Carregamento {
   totalSacos            Float    @default(0)
   totalPeso             Float    @default(0)
   totalValor            Float    @default(0)
+  observations          String?  // Observações do carregamento
+  cityGroups            Json?     // Estrutura: [{city, orders: [], palets: []}]
+  romaneio              Json?    // Romaneio por palete
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
+
+  palets                Palet[]
+  paletHistories        PaletHistory[]
+}
+
+model Palet {
+  id                String   @id @default(cuid())
+  carregamentoId    String
+  number            Int
+  city              String
+  items             Json     // [{productId, clients: [{orderId, customerName, quantity}]}]
+  totalWeight       Float    @default(0)
+  totalUnits        Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  carregamento      Carregamento @relation(fields: [carregamentoId], references: [id], onDelete: Cascade)
+
+  @@index([carregamentoId])
+}
+
+model PaletHistory {
+  id                String   @id @default(cuid())
+  carregamentoId    String
+  paletId           String?
+  action            String   // 'CRIADO' | 'MODIFICADO' | 'FINALIZADO'
+  details           Json     // Detalhes da ação
+  createdAt         DateTime @default(now())
+
+  carregamento      Carregamento @relation(fields: [carregamentoId], references: [id], onDelete: Cascade)
+
+  @@index([carregamentoId])
 }
 
 model SalesGoal {
