@@ -5,7 +5,6 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
 import {
@@ -21,14 +20,13 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
 import {
-    Package, FileDown, CheckCircle, CheckCircle2, Clock, Printer, ShieldCheck, Factory,
-    ArrowRight, Info, Box, MapPin, ArrowUpRight, ArrowDownRight, Plus, Search, ChevronDown, History
+    Package, CheckCircle, CheckCircle2, Clock, Printer, ShieldCheck, Factory,
+    ArrowRight, Info, Box, MapPin, ArrowUpRight, ArrowDownRight, Plus, Search, ChevronDown
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { ProductionStage, Product } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 import { useState, useMemo, useEffect } from 'react';
-import * as XLSX from 'xlsx';
 
 
 
@@ -37,36 +35,9 @@ export default function ProducaoEstoquePage() {
     const [groupByCity, setGroupByCity] = useState(false);
     const [selectedOrderDetails, setSelectedOrderDetails] = useState<any>(null);
     const { orders, products, updateProductionStage, updateOrderStatus, isReady, } = useSystemData();
-    const [historicoSearch, setHistoricoSearch] = useState('');
-    const [historicoStatus, setHistoricoStatus] = useState('ALL');
-    const [historicoDe, setHistoricoDe] = useState('');
-    const [historicoAte, setHistoricoAte] = useState('');
-    const [historicoCidade, setHistoricoCidade] = useState('ALL');
 
     const productionOrders = orders.filter(o => o.status === 'PRODUCAO');
-    const historicOrders = orders.filter(o => o.status !== 'PRODUCAO' && o.status !== 'PENDENTE');
 
-    const historicoFiltered = useMemo(() => {
-        return historicOrders.filter(o => {
-            const matchSearch = !historicoSearch ||
-                o.customerName?.toLowerCase().includes(historicoSearch.toLowerCase()) ||
-                o.id?.toLowerCase().includes(historicoSearch.toLowerCase());
-            const matchStatus = historicoStatus === 'ALL' || o.status === historicoStatus;
-            const matchCidade = historicoCidade === 'ALL' || o.city === historicoCidade;
-            const orderDate = new Date(o.createdAt);
-            const matchDe = !historicoDe || orderDate >= new Date(historicoDe);
-            const matchAte = !historicoAte || orderDate <= new Date(historicoAte);
-            return matchSearch && matchStatus && matchCidade && matchDe && matchAte;
-        });
-    }, [historicOrders, historicoSearch, historicoStatus, historicoCidade, historicoDe, historicoAte]);
-
-    const lotesDisponiveis = useMemo(() => {
-        return [...new Set(historicOrders.map(o => o.status).filter(Boolean))];
-    }, [historicOrders]);
-
-    const cidadesDisponiveis = useMemo(() => {
-        return [...new Set(historicOrders.map(o => o.city).filter(Boolean))];
-    }, [historicOrders]);
     const groupedProduction = useMemo(() => {
         if (!groupByCity) return { 'Todas as Ordens': productionOrders };
         return productionOrders.reduce((acc, order) => {
@@ -106,56 +77,22 @@ export default function ProducaoEstoquePage() {
         REJEITADO: 'Rejeitado',
     };
 
-    const handleExportHistorico = () => {
-        const rows: any[] = [];
-
-        historicoFiltered.forEach(order => {
-            order.items.forEach((item, idx) => {
-                const prod = products.find(p => p.id === item.productId);
-                rows.push({
-                    PEDIDO: idx === 0 ? order.id : '',
-                    CLIENTE: idx === 0 ? order.customerName : '',
-                    CIDADE: idx === 0 ? order.city : '',
-                    PRODUTO: prod?.name || item.productId,
-                    SACOS: item.quantity,
-                    'PESO KG': ((prod?.weight || 0) * item.quantity).toFixed(2),
-                    VALOR: idx === 0 ? order.totalValue : '',
-                    STATUS: idx === 0 ? (statusLabels[order.status] || order.status) : '',
-                    APROVADO: idx === 0 && (order as any).approvedAt ? new Date((order as any).approvedAt).toLocaleString('pt-BR') : '',
-                });
-            });
-        });
-
-        const ws = XLSX.utils.json_to_sheet(rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Histórico');
-        XLSX.writeFile(wb, `Historico_Producao_${format(new Date(), 'ddMMyy')}.xlsx`);
-    };
-
     return (
         <div className="space-y-6">
-            <Tabs defaultValue="producao" className="w-full">
-                <TabsList className="grid w-full max-w-[600px] grid-cols-2">
-                    <TabsTrigger value="producao" className="gap-2 font-bold text-xs uppercase"><Factory className="w-4 h-4" /> Produção</TabsTrigger>
-                    <TabsTrigger value="historico" className="gap-2 font-bold text-xs uppercase"><History className="w-4 h-4" /> Histórico</TabsTrigger>
-                </TabsList>
-
-                {/* ABA PRODUÇÃO */}
-                <TabsContent value="producao" className="mt-6 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
-                        <div>
-                            <h2 className="text-base sm:text-lg font-black uppercase tracking-tight">Fila de Produção</h2>
-                            <p className="text-[9px] sm:text-[10px] font-bold uppercase text-muted-foreground">Baixa automática de insumos ao concluir</p>
-                        </div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className={`gap-2 font-bold uppercase text-[9px] sm:text-[10px] w-full sm:w-auto ${groupByCity ? 'bg-primary/10 border-primary text-primary' : ''}`}
-                            onClick={() => setGroupByCity(!groupByCity)}
-                        >
-                            <MapPin className="w-3 sm:w-3.5 h-3 sm:h-3.5" /> Agrupar Cidade
-                        </Button>
-                    </div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+                <div>
+                    <h2 className="text-base sm:text-lg font-black uppercase tracking-tight">Fila de Produção</h2>
+                    <p className="text-[9px] sm:text-[10px] font-bold uppercase text-muted-foreground">Baixa automática de insumos ao concluir</p>
+                </div>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className={`gap-2 font-bold uppercase text-[9px] sm:text-[10px] w-full sm:w-auto ${groupByCity ? 'bg-primary/10 border-primary text-primary' : ''}`}
+                    onClick={() => setGroupByCity(!groupByCity)}
+                >
+                    <MapPin className="w-3 sm:w-3.5 h-3 sm:h-3.5" /> Agrupar Cidade
+                </Button>
+            </div>
 
                     {Object.keys(groupedProduction).map((city, idx) => {
                         const cityOrders = groupedProduction[city];
@@ -256,128 +193,6 @@ export default function ProducaoEstoquePage() {
                             </div>
                         );
                     })}
-                </TabsContent>
-
-                {/* ABA HISTÓRICO */}
-                <TabsContent value="historico" className="mt-6 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
-                        <div>
-                            <h2 className="text-base sm:text-lg font-black uppercase tracking-tight">Histórico de Produção</h2>
-                            <p className="text-[9px] sm:text-[10px] font-bold uppercase text-muted-foreground">Todos os pedidos processados</p>
-                        </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                            <span className="text-[8px] sm:text-[9px] font-bold text-muted-foreground uppercase">
-                                {historicoFiltered.length} pedidos
-                            </span>
-                            <Button variant="outline" size="sm" className="gap-2 font-bold uppercase text-[9px] sm:text-[10px]" onClick={handleExportHistorico}>
-                                <FileDown className="w-3.5 h-3.5" /> Exportar
-                            </Button>
-                        </div>
-                    </div>
-
-                    {/* Painel de Filtros */}
-                    <div className="bg-white border rounded-xl p-3 sm:p-4 space-y-3">
-                        <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-muted-foreground">Filtros</p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                            <div className="relative lg:col-span-2">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                                <Input placeholder="Pedido ou cliente..." className="pl-8 h-8 text-[12px] sm:text-xs font-bold"
-                                    value={historicoSearch} onChange={e => setHistoricoSearch(e.target.value)} />
-                            </div>
-                            <Select value={historicoStatus} onValueChange={setHistoricoStatus}>
-                                <SelectTrigger className="h-8 text-[12px] sm:text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="ALL">Todos os Status</SelectItem>
-                                    {Object.entries(statusLabels).map(([k, v]) => (
-                                        <SelectItem key={k} value={k}>{v}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Select value={historicoCidade} onValueChange={setHistoricoCidade}>
-                                <SelectTrigger className="h-8 text-[12px] sm:text-xs"><SelectValue placeholder="Cidade" /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="ALL">Todas as Cidades</SelectItem>
-                                    {cidadesDisponiveis.map(c => <SelectItem key={c} value={c!}>{c}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                            <Button variant="ghost" size="sm" className="h-8 text-[9px] sm:text-[10px] font-black uppercase text-muted-foreground"
-                                onClick={() => { setHistoricoSearch(''); setHistoricoStatus('ALL'); setHistoricoCidade('ALL'); setHistoricoDe(''); setHistoricoAte(''); }}>
-                                Limpar
-                            </Button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 sm:gap-4">
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                <label className="text-[8px] sm:text-[9px] font-black uppercase text-muted-foreground whitespace-nowrap">De:</label>
-                                <Input type="date" className="h-8 text-[11px] sm:text-xs flex-1" value={historicoDe} onChange={e => setHistoricoDe(e.target.value)} />
-                            </div>
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                                <label className="text-[8px] sm:text-[9px] font-black uppercase text-muted-foreground whitespace-nowrap">Até:</label>
-                                <Input type="date" className="h-8 text-[11px] sm:text-xs flex-1" value={historicoAte} onChange={e => setHistoricoAte(e.target.value)} />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Lista de Pedidos */}
-                    {historicoFiltered.length === 0 && (
-                        <Card className="border-none shadow-md">
-                            <CardContent className="py-16 text-center text-muted-foreground italic text-xs uppercase opacity-40">
-                                Nenhum pedido encontrado.
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    <Card className="border-none shadow-md overflow-x-auto">
-                        <CardContent className="p-0 min-w-full">
-                            <Table className="min-w-full">
-                                <TableHeader className="bg-muted/50">
-                                    <TableRow>
-                                        <TableHead className="text-[8px] sm:text-[9px] font-black uppercase">Pedido</TableHead>
-                                        <TableHead className="text-[8px] sm:text-[9px] font-black uppercase hidden sm:table-cell">Cliente</TableHead>
-                                        <TableHead className="text-[8px] sm:text-[9px] font-black uppercase hidden md:table-cell">Cidade</TableHead>
-                                        <TableHead className="text-[8px] sm:text-[9px] font-black uppercase text-center">Itens</TableHead>
-                                        <TableHead className="text-[8px] sm:text-[9px] font-black uppercase text-center hidden lg:table-cell">Peso</TableHead>
-                                        <TableHead className="text-[8px] sm:text-[9px] font-black uppercase text-right hidden md:table-cell">Valor</TableHead>
-                                        <TableHead className="text-[8px] sm:text-[9px] font-black uppercase text-center w-20 sm:w-28">Status</TableHead>
-                                        <TableHead className="text-[8px] sm:text-[9px] font-black uppercase text-center hidden sm:table-cell">Aprovado</TableHead>
-                                        <TableHead className="w-8 sm:w-12 text-right pr-2 sm:pr-4"></TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {historicoFiltered.map((order) => {
-                                        const totalUnitsOrder = order.items.reduce((acc, i) => acc + i.quantity, 0);
-                                        return (
-                                            <TableRow key={order.id} className="hover:bg-muted/20 h-10 sm:h-12">
-                                                <TableCell className="font-mono text-[10px] sm:text-[11px] font-black text-primary truncate">{order.id}</TableCell>
-                                                <TableCell className="text-[10px] sm:text-[11px] font-black uppercase hidden sm:table-cell">{order.customerName}</TableCell>
-                                                <TableCell className="text-[9px] sm:text-[10px] font-bold text-muted-foreground uppercase hidden md:table-cell">{order.city || '---'}</TableCell>
-                                                <TableCell className="text-center text-[9px] sm:text-[10px] font-black">{totalUnitsOrder} un</TableCell>
-                                                <TableCell className="text-center text-[9px] sm:text-[10px] font-black hidden lg:table-cell">{order.totalWeight?.toFixed(2)} kg</TableCell>
-                                                <TableCell className="text-right text-[10px] sm:text-[11px] font-black hidden md:table-cell">R$ {(order.totalValue || 0).toLocaleString()}</TableCell>
-                                                <TableCell className="text-center">
-                                                    <Badge variant="outline" className={`${statusColors[order.status] || ''} text-[7px] sm:text-[8px] font-black uppercase px-1 h-4`}>
-                                                        {statusLabels[order.status] || order.status}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-center text-[8px] sm:text-[9px] font-bold text-muted-foreground hidden sm:table-cell whitespace-nowrap">
-                                                    {(order as any).approvedAt ? new Date((order as any).approvedAt).toLocaleString('pt-BR') : '---'}
-                                                </TableCell>
-                                                <TableCell className="text-right pr-2 sm:pr-4">
-                                                    <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 text-primary"
-                                                        onClick={() => setSelectedOrderDetails(order)}>
-                                                        <Info className="w-3.5 sm:w-4 h-3.5 sm:h-4" />
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })}
-                                </TableBody>
-                            </Table>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-
-            </Tabs>
 
             {/* MODAL DETALHES DO PEDIDO */}
             <Dialog open={!!selectedOrderDetails} onOpenChange={(open) => !open && setSelectedOrderDetails(null)}>

@@ -11,13 +11,14 @@ import {
   ResponsiveContainer, Cell
 } from 'recharts';
 import {
-  TrendingUp, ShoppingCart, Clock, FileCheck, ArrowRight,
+  TrendingUp, ShoppingCart, Clock, ArrowRight,
   Wallet, PackageCheck, Factory, Truck, Package, CheckCircle2, CreditCard,
-  MapPin, Weight, Users, ChevronRight, AlertTriangle, LogOut
+  MapPin, Users, ChevronRight, AlertTriangle, Activity
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Link from 'next/link';
+import { useMemo } from 'react';
 
 const STATUS_FLOW = [
   { key: 'PENDENTE', label: 'Pendente', color: 'bg-yellow-400', textColor: 'text-yellow-700', icon: Clock },
@@ -29,7 +30,23 @@ const STATUS_FLOW = [
 ];
 
 function DashboardContent() {
-  const { orders, vehicles, drivers, isReady, hasError, error } = useSystemData();
+  const { orders, customers, isReady, hasError, error } = useSystemData();
+
+  const salesTrend = useMemo(() => {
+    const trend = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = subDays(new Date(), i);
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const dailyOrders = orders.filter(o => o.createdAt.startsWith(dateStr));
+      const value = dailyOrders.reduce((sum, o) => sum + o.totalValue, 0);
+      trend.push({
+        date: format(date, 'dd/MM'),
+        valor: value,
+        pedidos: dailyOrders.length
+      });
+    }
+    return trend;
+  }, [orders]);
 
   if (!isReady) {
     return (
@@ -63,7 +80,8 @@ function DashboardContent() {
     value: orders.filter(o => o.status === s.key).reduce((acc, o) => acc + o.totalValue, 0),
   }));
 
-  // Top cidades (por valor de pedidos ativos)
+  // Componente Removido ou Refatorado, substituindo o interior de DashboardContent
+// Adicionaremos Date FNS para pegar os ultimos 7 dias.
   const activeOrders = orders.filter(o => !['REJEITADO', 'ENTREGUE'].includes(o.status));
   const cidadeMap: Record<string, { count: number; value: number; peso: number }> = {};
   activeOrders.forEach(o => {

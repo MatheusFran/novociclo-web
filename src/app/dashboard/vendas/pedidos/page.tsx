@@ -60,13 +60,13 @@ const EMPTY_CUSTOMER: CustomerForm = {
 // ─────────────────────────────────────────────
 const STATUS_MAP: Record<OrderStatus, { label: string; color: string; icon: any }> = {
   PENDENTE: { label: 'Pendente', color: 'bg-yellow-100 text-yellow-800 border-yellow-200', icon: Clock },
+  FINANCEIRO: { label: 'Aprovação Financeira', color: 'bg-cyan-100 text-cyan-800 border-cyan-200', icon: CreditCard },
   PRODUCAO: { label: 'Produção', color: 'bg-orange-100 text-orange-800 border-orange-200', icon: Package },
   PRONTO_LOGISTICA: { label: 'Expedição', color: 'bg-blue-100 text-blue-800 border-blue-200', icon: Truck },
   ENTREGA: { label: 'Em Entrega', color: 'bg-purple-100 text-purple-800 border-purple-200', icon: Truck },
-  AGUARDANDO_FATURAMENTO: { label: 'Financeiro', color: 'bg-indigo-100 text-indigo-800 border-indigo-200', icon: CreditCard },
+  AGUARDANDO_FATURAMENTO: { label: 'Faturamento', color: 'bg-indigo-100 text-indigo-800 border-indigo-200', icon: CreditCard },
   FATURADO: { label: 'Faturado', color: 'bg-green-100 text-green-800 border-green-200', icon: FileText },
   ENTREGUE: { label: 'Entregue', color: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle2 },
-
   REJEITADO: { label: 'Rejeitado', color: 'bg-red-100 text-red-800 border-red-200', icon: AlertCircle },
   CANCELADO: { label: 'Cancelado', color: 'bg-gray-100 text-gray-800 border-gray-200', icon: Trash2 },
 };
@@ -220,6 +220,12 @@ function OrderFormModal({
   const [priceList, setPriceList] = useState(priceTables[0]?.id || 'PADRAO');
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [createdAt, setCreatedAt] = useState('');
+  
+  // Descarga e Entrega
+  const [meioDescarga, setMeioDescarga] = useState('');
+  const [responsavelDescarga, setResponsavelDescarga] = useState('');
+  const [dataHoraDescarga, setDataHoraDescarga] = useState('');
+  const [especificidadesEntrega, setEspecificidadesEntrega] = useState('');
 
   // ── FIX: único ponto de inicialização — roda apenas quando `open` muda para true ──
   useEffect(() => {
@@ -245,6 +251,10 @@ function OrderFormModal({
       setObservations((editingOrder as any).observations || '');
       setPriceList(editingOrder.priceTableId || priceTables[0]?.id || 'PADRAO');
       setCart(editingOrder.items || []);
+      setMeioDescarga((editingOrder as any).meioDescarga || '');
+      setResponsavelDescarga((editingOrder as any).responsavelDescarga || '');
+      setDataHoraDescarga((editingOrder as any).dataHoraDescarga || '');
+      setEspecificidadesEntrega((editingOrder as any).especificidadesEntrega || '');
     } else {
       // Novo pedido (possivelmente com dados pré-preenchidos de cotação)
       setCustomerId('');
@@ -258,7 +268,10 @@ function OrderFormModal({
       setPriceList(initialPriceList || priceTables[0]?.id || 'PADRAO');
       setCart(initialCart || []);
       setCreatedAt(new Date().toISOString().slice(0, 10));
-
+      setMeioDescarga('');
+      setResponsavelDescarga('');
+      setDataHoraDescarga('');
+      setEspecificidadesEntrega('');
     }
     setCustomerSearchOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -324,7 +337,10 @@ function OrderFormModal({
       paymentCondition, deliveryDate, priceTableId: priceList,
       observations,
       createdAt: new Date(createdAt).toISOString(),
-
+      meioDescarga: meioDescarga ? meioDescarga as 'PROPRIO' | 'AJUDANTE_EXTERNO' | 'EMPILHADEIRA' : undefined,
+      responsavelDescarga: responsavelDescarga ? responsavelDescarga as 'CLIENTE' | 'LOTUS' : undefined,
+      dataHoraDescarga: dataHoraDescarga ? new Date(dataHoraDescarga).toISOString() : undefined,
+      especificidadesEntrega: especificidadesEntrega || undefined,
     });
     onOpenChange(false);
   };
@@ -510,6 +526,42 @@ function OrderFormModal({
 
           <Separator />
 
+          {/* ── Descarga e Entrega ── */}
+          <div className="space-y-3">
+            <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <Truck className="w-3 h-3" /> Descarga e Entrega
+            </p>
+            <Select onValueChange={setMeioDescarga} value={meioDescarga}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Meio de Descarga" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PROPRIO">Próprio</SelectItem>
+                <SelectItem value="AJUDANTE_EXTERNO">Ajudante Externo</SelectItem>
+                <SelectItem value="EMPILHADEIRA">Empilhadeira</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select onValueChange={setResponsavelDescarga} value={responsavelDescarga}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Responsável pela Descarga" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="CLIENTE">Cliente</SelectItem>
+                <SelectItem value="LOTUS">Lotus</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase">Data e Hora da Descarga</label>
+              <Input
+                type="datetime-local"
+                className="h-9 text-xs"
+                value={dataHoraDescarga}
+                onChange={e => setDataHoraDescarga(e.target.value)}
+              />
+            </div>
+            <Textarea value={especificidadesEntrega} onChange={e => setEspecificidadesEntrega(e.target.value)}
+              placeholder="Especificidades de entrega (observações sobre o local, acesso, restrições, etc.)"
+              className="text-xs resize-none min-h-[60px]" />
+          </div>
+
+          <Separator />
+
           {/* ── Observações ── */}
           <div className="space-y-3">
             <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
@@ -615,8 +667,21 @@ export default function PedidosPage() {
   };
 
   const handleApproveOrder = (orderId: string) => {
-    updateOrderStatus(orderId, 'PRODUCAO', { productionStage: 'FILA' });
-    toast({ title: "Pedido Aprovado", description: "Enviado para fila de produção." });
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // Verificar se é venda a prazo (boleto, cartão parcelado, bonificado)
+    const isInstallment = ['BOLETO_15_DIAS', 'BOLETO_30_DIAS', 'BOLETO_30_60', 'BOLETO_30_60_90', 'CARTAO2X', 'BONIFICADO'].includes(order.paymentCondition);
+
+    if (isInstallment) {
+      // Enviar para aprovação financeira
+      updateOrderStatus(orderId, 'FINANCEIRO', { approvedAt: new Date().toISOString() });
+      toast({ title: "Pedido Enviado", description: "Pendente de aprovação financeira (venda a prazo)." });
+    } else {
+      // Venda à vista - enviar direto para produção
+      updateOrderStatus(orderId, 'PRODUCAO', { productionStage: 'FILA', approvedAt: new Date().toISOString() });
+      toast({ title: "Pedido Aprovado", description: "Enviado para fila de produção (venda à vista)." });
+    }
     setOrderToApprove(null);
   };
 
@@ -672,29 +737,36 @@ export default function PedidosPage() {
         showGroupByCity
         showExport
         exportFileName="Relatorio_Pedidos"
+        onRowClick={o => router.push(`/dashboard/vendas/pedidos/${o.id}`)}
         columns={[
           {
             key: 'id',
-            header: 'Ref.',
-            render: o => <span className="font-mono text-[11px] font-black text-primary whitespace-nowrap">{o.id}</span>,
+            header: 'ID',
+            render: o => <span className="font-mono text-xs font-semibold text-slate-600 whitespace-nowrap">{o.id}</span>,
           },
           {
             key: 'customerName',
             header: 'Cliente',
-            render: o => <span className="text-[11px] font-black uppercase text-slate-700 max-w-[120px] truncate block">{o.customerName}</span>,
+            render: o => <span className="text-xs font-medium uppercase text-slate-800 max-w-[160px] truncate block">{o.customerName}</span>,
           },
           {
             key: 'seller',
             header: 'Vendedor',
-            render: o => <span className="text-[10px] font-bold text-slate-500 uppercase whitespace-nowrap">{o.seller || '---'}</span>,
+            render: o => <span className="text-[11px] font-medium text-slate-500 uppercase whitespace-nowrap">{o.seller || '---'}</span>,
+          },
+          {
+            key: 'createdAt',
+            header: 'Dt Emissão',
+            align: 'center',
+            render: o => <span className="text-[11px] font-medium whitespace-nowrap">{o.createdAt ? format(new Date(o.createdAt), 'dd/MM/yy') : '---'}</span>,
           },
           {
             key: 'city',
             header: 'Cidade',
             render: o => (
               <div className="flex items-center gap-1">
-                <MapPin className="w-3 h-3 text-muted-foreground shrink-0" />
-                <span className="text-[10px] font-black text-slate-700 uppercase whitespace-nowrap">{o.city || '---'}</span>
+                <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                <span className="text-[11px] font-medium text-slate-600 uppercase whitespace-nowrap">{o.city || '---'}</span>
               </div>
             ),
           },
@@ -702,25 +774,19 @@ export default function PedidosPage() {
             key: 'qty',
             header: 'Qtd',
             align: 'center',
-            render: o => <span className="text-[10px] font-black">{(o.items || []).reduce((acc, i) => acc + i.quantity, 0)}</span>,
+            render: o => <span className="text-[11px] font-medium">{o.items?.length ? o.items.reduce((acc, i) => acc + i.quantity, 0) : 0}</span>,
           },
           {
             key: 'weight',
-            header: 'KG',
+            header: 'Peso',
             align: 'center',
-            render: o => <span className="text-[10px] font-black">{o.totalWeight?.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KG</span>,
-          },
-          {
-            key: 'createdAt',
-            header: 'Data',
-            align: 'center',
-            render: o => <span className="text-[10px] whitespace-nowrap">{o.createdAt ? format(new Date(o.createdAt), 'dd/MM/yy') : '---'}</span>,
+            render: o => <span className="text-[11px] font-medium">{o.totalWeight?.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KG</span>,
           },
           {
             key: 'totalValue',
             header: 'Valor',
             align: 'right',
-            render: o => <span className="text-[11px] font-black whitespace-nowrap">R$ {(o.totalValue || 0).toLocaleString()}</span>,
+            render: o => <span className="text-xs font-semibold whitespace-nowrap">R$ {(o.totalValue || 0).toLocaleString()}</span>,
           },
           {
             key: 'status',
@@ -730,7 +796,7 @@ export default function PedidosPage() {
               const StatusIcon = STATUS_MAP[o.status]?.icon || AlertCircle;
               return (
                 <Badge variant="outline"
-                  className={`${STATUS_MAP[o.status]?.color} text-[8px] font-black uppercase tracking-tighter px-2 h-5 flex items-center gap-1 justify-center whitespace-nowrap`}>
+                  className={`${STATUS_MAP[o.status]?.color} text-[10px] font-medium uppercase tracking-wide px-2 h-5 flex items-center gap-1 justify-center whitespace-nowrap`}>
                   <StatusIcon className="w-2.5 h-2.5" />
                   {STATUS_MAP[o.status]?.label || o.status}
                 </Badge>
@@ -746,13 +812,6 @@ export default function PedidosPage() {
             className: 'text-green-600 hover:bg-green-50',
             hidden: o => o.status !== 'PENDENTE',
             onClick: o => setOrderToApprove(o.id),
-          },
-          {
-            label: 'Ver',
-            icon: <Eye className="w-3.5 h-3.5" />,
-            variant: 'ghost',
-            className: 'text-primary',
-            onClick: o => router.push(`/dashboard/vendas/pedidos/${o.id}`),
           },
           {
             label: 'Editar',
@@ -813,6 +872,22 @@ export default function PedidosPage() {
                 <p><b>Responsável:</b> {selectedOrder?.user}</p>
                 <p><b>Fechado por:</b> {selectedOrder?.closedBy || '---'}</p>
                 <p><b>Observações:</b> {selectedOrder?.observations || '---'}</p>
+                {(selectedOrder?.meioDescarga || selectedOrder?.responsavelDescarga || selectedOrder?.dataHoraDescarga || selectedOrder?.especificidadesEntrega) && (
+                  <>
+                    <hr className="my-2" />
+                    <p className="text-sm font-semibold text-blue-600">Descarga e Entrega:</p>
+                    {selectedOrder?.meioDescarga && <p><b>Meio:</b> {
+                      selectedOrder.meioDescarga === 'PROPRIO' ? '🏢 Próprio' :
+                      selectedOrder.meioDescarga === 'AJUDANTE_EXTERNO' ? '👷 Externo' :
+                      '🏗️ Empilhadeira'
+                    }</p>}
+                    {selectedOrder?.responsavelDescarga && <p><b>Responsável:</b> {
+                      selectedOrder.responsavelDescarga === 'CLIENTE' ? '👤 Cliente' : '🏪 Lotus'
+                    }</p>}
+                    {selectedOrder?.dataHoraDescarga && <p><b>Data/Hora:</b> {new Date(selectedOrder.dataHoraDescarga).toLocaleString('pt-BR')}</p>}
+                    {selectedOrder?.especificidadesEntrega && <p><b>Observações:</b> {selectedOrder.especificidadesEntrega}</p>}
+                  </>
+                )}
               </>
             )
           },
@@ -824,6 +899,22 @@ export default function PedidosPage() {
                 <p><b>Lote:</b> {selectedOrder?.loteId || '---'}</p>
                 <p><b>Data Lote:</b> {selectedOrder?.loteDate ? new Date(selectedOrder.loteDate).toLocaleString() : '---'}</p>
                 <p><b>Aprovado em:</b> {selectedOrder?.approvedAt ? new Date(selectedOrder.approvedAt).toLocaleString() : '---'}</p>
+              </>
+            )
+          },
+          {
+            title: 'Aprovação Financeira',
+            content: (
+              <>
+                <p><b>Status:</b> {selectedOrder?.status === 'FINANCEIRO' ? '⏳ Aguardando' : selectedOrder?.approvedByFinance ? '✓ Aprovado' : '---'}</p>
+                <p><b>Aprovado em:</b> {selectedOrder?.approvedByFinance ? new Date(selectedOrder.approvedByFinance).toLocaleString() : '---'}</p>
+                <p><b>Aprovado por:</b> {selectedOrder?.approvedByFinanceUser || '---'}</p>
+                {selectedOrder?.rejectionReason && (
+                  <>
+                    <p><b>Motivo Rejeição:</b> {selectedOrder.rejectionReason}</p>
+                    <p><b>Rejeitado por:</b> {selectedOrder.rejectedBy || '---'}</p>
+                  </>
+                )}
               </>
             )
           }
@@ -842,12 +933,35 @@ export default function PedidosPage() {
             )
           },
           {
+            title: 'Descarga e Entrega',
+            content: (
+              <>
+                <p><b>Meio de Descarga:</b> {
+                  selectedOrder?.meioDescarga === 'PROPRIO' ? '🏢 Próprio' :
+                  selectedOrder?.meioDescarga === 'AJUDANTE_EXTERNO' ? '👷 Ajudante Externo' :
+                  selectedOrder?.meioDescarga === 'EMPILHADEIRA' ? '🏗️ Empilhadeira' :
+                  '---'
+                }</p>
+                <p><b>Responsável:</b> {
+                  selectedOrder?.responsavelDescarga === 'CLIENTE' ? '👤 Cliente' :
+                  selectedOrder?.responsavelDescarga === 'LOTUS' ? '🏪 Lotus' :
+                  '---'
+                }</p>
+                <p><b>Data/Hora Descarga:</b> {selectedOrder?.dataHoraDescarga ? new Date(selectedOrder.dataHoraDescarga).toLocaleString() : '---'}</p>
+                <p><b>Observações Entrega:</b> {selectedOrder?.especificidadesEntrega || '---'}</p>
+              </>
+            )
+          },
+          {
             title: 'Faturamento',
             content: (
               <>
                 <p><b>NF:</b> {selectedOrder?.nfNumero || '---'}</p>
                 <p><b>Venda Direta:</b> {selectedOrder?.vendaDiretaNumero || '---'}</p>
                 <p><b>Faturado em:</b> {selectedOrder?.invoicedAt ? new Date(selectedOrder.invoicedAt).toLocaleString() : '---'}</p>
+                {selectedOrder?.rejectionReason && (
+                  <p style={{color: '#ef4444'}}><b>❌ Motivo Rejeição:</b> {selectedOrder.rejectionReason}</p>
+                )}
                 <p><b>Rejeitado em:</b> {selectedOrder?.rejectedAt ? new Date(selectedOrder.rejectedAt).toLocaleString() : '---'}</p>
               </>
             )

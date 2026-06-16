@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/server/prisma';
 import { authorizeAdmin, authorizeUser } from '@/app/api/_lib/route-utils';
+import { createOrderStatusNotification } from '@/lib/notification-service';
+import { createAuditLog } from '@/lib/audit-log-service';
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -64,6 +66,10 @@ export async function PATCH(_request: NextRequest, context: { params: Promise<{ 
     if (data.grupoCarga !== undefined) payload.grupoCarga = data.grupoCarga;
     if (data.tipoCarga !== undefined) payload.tipoCarga = data.tipoCarga;
     if (data.dataCarregamento !== undefined) payload.dataCarregamento = data.dataCarregamento ? new Date(data.dataCarregamento) : null;
+    if (data.meioDescarga !== undefined) payload.meioDescarga = data.meioDescarga;
+    if (data.responsavelDescarga !== undefined) payload.responsavelDescarga = data.responsavelDescarga;
+    if (data.dataHoraDescarga !== undefined) payload.dataHoraDescarga = data.dataHoraDescarga ? new Date(data.dataHoraDescarga) : null;
+    if (data.especificidadesEntrega !== undefined) payload.especificidadesEntrega = data.especificidadesEntrega;
 
     console.log('BODY:', data);
 
@@ -85,6 +91,27 @@ export async function PATCH(_request: NextRequest, context: { params: Promise<{ 
       data: payload,
       include: { items: true, customer: true },
     });
+
+    // Enviar notificação se o status foi alterado
+    if (data.status !== undefined) {
+      const oldOrder = await prisma.order.findUnique({ where: { id } });
+      if (oldOrder && oldOrder.status !== data.status) {
+        // Buscar o usuário vendedor para notificar
+        const sellerUser = await prisma.user.findFirst({
+          where: { name: updated.seller },
+        });
+
+        if (sellerUser) {
+          await createOrderStatusNotification({
+            orderId: id,
+            userId: sellerUser.id,
+            oldStatus: oldOrder.status as any,
+            newStatus: data.status,
+            customerName: updated.customerName,
+          });
+        }
+      }
+    }
 
     // Baixa automática de estoque quando passa para PRODUCAO
     if (data.status === 'PRONTO_LOGISTICA') {
@@ -131,6 +158,19 @@ export async function PATCH(_request: NextRequest, context: { params: Promise<{ 
         return NextResponse.json({ ...updated, stockWarnings: warnings });
       }
     }
+
+    // Registrar a ação no audit log
+    const userId = _request.headers.get('x-user-id') || 'unknown';
+    await createAuditLog({
+      userId,
+      action: 'UPDATE_ORDER',
+      resource: 'Order',
+      resourceId: id,
+      details: {
+        changedFields: Object.keys(payload),
+        status: data.status,
+      },
+    });
 
     return NextResponse.json(updated);
   } catch (err) {

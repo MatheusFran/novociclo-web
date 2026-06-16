@@ -18,19 +18,19 @@ const footerLinks = [
 
 export default function Footer() {
     return (
-        <footer className="bg-foreground text-background">
-            <div className="max-w-7xl mx-auto px-6 lg:px-8 py-16">
-                <div className="grid md:grid-cols-4 gap-12 mb-12">
+        <footer className="bg-gradient-to-b from-primary to-primary/95 text-white">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+                <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-8 sm:gap-12 mb-10 sm:mb-12">
                     {/* Brand */}
                     <div>
                         <div className="mb-5">
                             <img
-                                src="https://media.base44.com/images/public/69fc7a106aa628b0f94b4a74/5b694c960_logonewbranca.png"
+                                src="/logo.png"
                                 alt="Novo Ciclo"
-                                className="h-14 w-auto object-contain"
+                                className="h-12 sm:h-14 w-auto object-contain filter brightness-0 invert"
                             />
                         </div>
-                        <p className="font-body text-sm text-background/60 leading-relaxed">
+                        <p className="font-body text-xs sm:text-sm text-white/70 leading-relaxed">
                             Composto orgânico de alta qualidade para gramados, hortas e jardins.
                             Sustentabilidade e resultado em cada saco.
                         </p>
@@ -39,13 +39,13 @@ export default function Footer() {
                     {/* Links */}
                     {footerLinks.map((col) => (
                         <div key={col.title}>
-                            <h4 className="font-heading font-semibold text-sm mb-5 tracking-wide">
+                            <h4 className="font-heading font-semibold text-xs sm:text-sm mb-4 sm:mb-5 tracking-wide">
                                 {col.title}
                             </h4>
-                            <ul className="space-y-3">
+                            <ul className="space-y-2 sm:space-y-3">
                                 {col.links.map((link) => (
                                     <li key={link}>
-                                        <span className="font-body text-sm text-background/50 hover:text-background/90 transition-colors cursor-pointer">
+                                        <span className="font-body text-xs sm:text-sm text-white/60 hover:text-white/90 transition-colors cursor-pointer">
                                             {link}
                                         </span>
                                     </li>
@@ -55,17 +55,17 @@ export default function Footer() {
                     ))}
                 </div>
 
-                <Separator className="bg-background/10 mb-8" />
+                <Separator className="bg-white/20 mb-6 sm:mb-8" />
 
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <p className="font-body text-xs text-background/40">
+                    <p className="font-body text-xs text-white/50">
                         © {new Date().getFullYear()} Novo Ciclo. Todos os direitos reservados.
                     </p>
-                    <div className="flex items-center gap-6">
-                        <span className="font-body text-xs text-background/40 hover:text-background/70 cursor-pointer transition-colors">
+                    <div className="flex items-center gap-4 sm:gap-6">
+                        <span className="font-body text-xs text-white/50 hover:text-white/70 cursor-pointer transition-colors">
                             Política de Privacidade
                         </span>
-                        <span className="font-body text-xs text-background/40 hover:text-background/70 cursor-pointer transition-colors">
+                        <span className="font-body text-xs text-white/50 hover:text-white/70 cursor-pointer transition-colors">
                             Termos de Uso
                         </span>
                     </div>

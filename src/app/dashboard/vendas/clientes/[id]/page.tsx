@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSystemData } from '@/server/store';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
     Loader2, ArrowLeft, Building2, Phone, Mail, MapPin,
@@ -292,6 +292,11 @@ export default function CustomerPage() {
     const [localCobrancas, setLocalCobrancas] = useState<LocalCobranca[]>([]);
     const [novaCobrancaModal, setNovaCobrancaModal] = useState(false);
 
+    // ── Ocorrências
+    const [ocorrencias, setOcorrencias] = useState<any[]>([]);
+    const [isLoadingOcorrencias, setIsLoadingOcorrencias] = useState(true);
+    const [selectedOcorrencia, setSelectedOcorrencia] = useState<any | null>(null);
+
     // ── Saving states
     const [saving, setSaving] = useState(false);
     const [savingInad, setSavingInad] = useState(false);
@@ -326,6 +331,43 @@ export default function CustomerPage() {
     const [fScore, setFScore] = useState('');
     const [fPrazo, setFPrazo] = useState('');
     const [fVendaPrazo, setFVendaPrazo] = useState('');
+
+    // ── Fetch ocorrências
+    useEffect(() => {
+        if (customerOrders.length === 0) {
+            setOcorrencias([]);
+            return;
+        }
+
+        const fetchOcorrencias = async () => {
+            setIsLoadingOcorrencias(true);
+            try {
+                // Busca ocorrências de todos os pedidos do cliente
+                const allOcorrencias: any[] = [];
+                
+                for (const order of customerOrders) {
+                    const res = await fetch(`/api/ocorrencias?orderId=${order.id}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        allOcorrencias.push(...data);
+                    }
+                }
+                
+                // Ordena por data decrescente
+                allOcorrencias.sort((a, b) => 
+                    new Date(b.dataOcorrencia).getTime() - new Date(a.dataOcorrencia).getTime()
+                );
+                
+                setOcorrencias(allOcorrencias);
+            } catch (error) {
+                console.error('Erro ao buscar ocorrências:', error);
+            } finally {
+                setIsLoadingOcorrencias(false);
+            }
+        };
+
+        fetchOcorrencias();
+    }, [customerOrders]);
 
     // ── Abrir modais (preencher form com dados atuais)
     const openEmpresa = () => {
@@ -468,6 +510,7 @@ export default function CustomerPage() {
                         { value: 'visao-geral', label: 'Visão Geral', icon: <BarChart3 className="w-3.5 h-3.5" /> },
                         { value: 'pedidos', label: 'Pedidos', icon: <ShoppingCart className="w-3.5 h-3.5" />, count: customerOrders.length },
                         { value: 'crm', label: 'CRM', icon: <Activity className="w-3.5 h-3.5" />, count: pipelines.length },
+                        { value: 'ocorrencias', label: 'Ocorrências', icon: <AlertTriangle className="w-3.5 h-3.5" />, count: ocorrencias.length },
                         { value: 'financeiro', label: 'Financeiro', icon: <CreditCard className="w-3.5 h-3.5" /> },
                     ].map(t => (
                         <TabsTrigger key={t.value} value={t.value} className="gap-1.5 font-bold text-[11px] uppercase">
@@ -792,7 +835,150 @@ export default function CustomerPage() {
                         </Card>
                     </div>
                 </TabsContent>
+
+                {/* ══ OCORRÊNCIAS ══ */}
+                <TabsContent value="ocorrencias" className="mt-6">
+                    {isLoadingOcorrencias ? (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : ocorrencias.length === 0 ? (
+                        <Card className="border shadow-sm">
+                            <CardContent className="py-12">
+                                <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                                    <AlertTriangle className="w-8 h-8 opacity-50" />
+                                    <p className="text-sm font-bold uppercase">Nenhuma ocorrência registrada</p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <div className="space-y-3">
+                            {ocorrencias.map((occ) => (
+                                <Card key={occ.id} className="border shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => setSelectedOcorrencia(occ)}>
+                                    <CardContent className="p-4">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <p className="font-semibold text-sm text-slate-800">{occ.titulo}</p>
+                                                    <Badge variant="outline" className={`text-xs flex-shrink-0 ${
+                                                        occ.prioridade === 'BAIXA' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                        occ.prioridade === 'ALTA' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                        occ.prioridade === 'CRITICA' ? 'bg-red-50 text-red-700 border-red-200' :
+                                                        'bg-slate-50 text-slate-700 border-slate-200'
+                                                    }`}>
+                                                        {occ.prioridade}
+                                                    </Badge>
+                                                </div>
+                                                <p className="text-xs text-slate-600 line-clamp-2 mb-2">{occ.descricao}</p>
+                                                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                                    <span>{new Date(occ.dataOcorrencia).toLocaleDateString('pt-BR')}</span>
+                                                    <Badge variant="outline" className="text-[10px]">{occ.tipo}</Badge>
+                                                </div>
+                                            </div>
+                                            <Badge variant="outline" className={`flex-shrink-0 text-xs ${
+                                                occ.status === 'PENDENTE' ? 'bg-orange-50 border-orange-200 text-orange-700' :
+                                                occ.status === 'RESOLVIDO' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                                                'bg-slate-50 border-slate-200 text-slate-700'
+                                            }`}>
+                                                {occ.status}
+                                            </Badge>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
+                </TabsContent>
             </Tabs>
+
+            {/* ══ MODAL: VISUALIZAR OCORRÊNCIA ══ */}
+            <Dialog open={!!selectedOcorrencia} onOpenChange={(open) => !open && setSelectedOcorrencia(null)}>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="w-5 h-5 text-orange-600" />
+                            Detalhes da Ocorrência
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {selectedOcorrencia && (
+                        <div className="space-y-4">
+                            {/* Data e Status */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Data</p>
+                                    <p className="text-sm font-medium text-slate-800">
+                                        {new Date(selectedOcorrencia.dataOcorrencia).toLocaleDateString('pt-BR', {
+                                            year: 'numeric',
+                                            month: 'long',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                        })}
+                                    </p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Status</p>
+                                    <Badge variant="outline" className={selectedOcorrencia.status === 'PENDENTE' ? 'bg-orange-50 border-orange-200 text-orange-700' :
+                                        selectedOcorrencia.status === 'RESOLVIDO' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                                        'bg-slate-50 border-slate-200 text-slate-700'}>
+                                        {selectedOcorrencia.status}
+                                    </Badge>
+                                </div>
+                            </div>
+
+                            {/* Tipo e Prioridade */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Tipo</p>
+                                    <Badge variant="outline">{selectedOcorrencia.tipo}</Badge>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Prioridade</p>
+                                    <Badge variant="outline" className={
+                                        selectedOcorrencia.prioridade === 'BAIXA' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                        selectedOcorrencia.prioridade === 'ALTA' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                        selectedOcorrencia.prioridade === 'CRITICA' ? 'bg-red-50 text-red-700 border-red-200' :
+                                        'bg-slate-50 text-slate-700 border-slate-200'
+                                    }>
+                                        {selectedOcorrencia.prioridade}
+                                    </Badge>
+                                </div>
+                            </div>
+
+                            {/* Título */}
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Título</p>
+                                <p className="text-sm font-medium text-slate-800">{selectedOcorrencia.titulo}</p>
+                            </div>
+
+                            {/* Descrição */}
+                            <div>
+                                <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Descrição</p>
+                                <p className="text-sm text-slate-700 whitespace-pre-wrap bg-slate-50 p-3 rounded-md border border-slate-200">
+                                    {selectedOcorrencia.descricao}
+                                </p>
+                            </div>
+
+                            {/* Observações */}
+                            {selectedOcorrencia.observacoes && (
+                                <div className="border-t border-slate-200 pt-4">
+                                    <p className="text-xs text-slate-500 uppercase font-semibold mb-1">Observações</p>
+                                    <p className="text-sm text-slate-700 whitespace-pre-wrap bg-slate-50 p-3 rounded-md border border-slate-200">
+                                        {selectedOcorrencia.observacoes}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setSelectedOcorrencia(null)}>
+                            Fechar
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* ══ MODAIS DE EDIÇÃO ══ */}
             <EditModal open={modalEmpresa} onOpenChange={setModalEmpresa} title="Editar Dados da Empresa" icon={<Building2 className="w-4 h-4" />} onSave={saveEmpresa} saving={saving}>

@@ -266,12 +266,50 @@ export function OrderDetailsModal({
                   <SectionTitle>Status</SectionTitle>
                   <div className="space-y-2 text-sm">
                     {order.createdAt && <p>Criado: {fmtDateTime(order.createdAt)}</p>}
-                    {order.approvedAt && <p>Aprovado: {fmtDateTime(order.approvedAt)}</p>}
-                    {order.invoicedAt && <p>Faturado: {fmtDateTime(order.invoicedAt)}</p>}
+                    {order.approvedAt && <p>Aprovado: {fmtDateTime(order.approvedAt)}</p>}                    {(order as any).approvedByFinance && <p>✓ Aprova\u00e7\u00e3o Financeira: {fmtDateTime((order as any).approvedByFinance)}</p>}                    {order.invoicedAt && <p>Faturado: {fmtDateTime(order.invoicedAt)}</p>}
                     {order.departureTime && <p>Saída: {fmtDateTime(order.departureTime)}</p>}
                     {order.deliveredAt && <p>Entregue: {fmtDateTime(order.deliveredAt)}</p>}
                   </div>
                 </div>
+
+                {/* DESCARGA E ENTREGA */}
+                {((order as any).meioDescarga || (order as any).responsavelDescarga || (order as any).dataHoraDescarga || (order as any).especificidadesEntrega) && (
+                  <div className="space-y-4 bg-blue-50 p-4 rounded-lg">
+                    <SectionTitle>Descarga e Entrega</SectionTitle>
+                    <div className="space-y-3 text-sm">
+                      {(order as any).meioDescarga && (
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase">Meio de Descarga</p>
+                          <p className="font-medium">
+                            {(order as any).meioDescarga === 'PROPRIO' ? '🏢 Próprio' :
+                             (order as any).meioDescarga === 'AJUDANTE_EXTERNO' ? '👷 Ajudante Externo' :
+                             '🏗️ Empilhadeira'}
+                          </p>
+                        </div>
+                      )}
+                      {(order as any).responsavelDescarga && (
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase">Responsável pela Descarga</p>
+                          <p className="font-medium">
+                            {(order as any).responsavelDescarga === 'CLIENTE' ? '👤 Cliente' : '🏪 Lotus'}
+                          </p>
+                        </div>
+                      )}
+                      {(order as any).dataHoraDescarga && (
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase">Data e Hora da Descarga</p>
+                          <p className="font-medium">{fmtDateTime((order as any).dataHoraDescarga)}</p>
+                        </div>
+                      )}
+                      {(order as any).especificidadesEntrega && (
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground uppercase">Especificidades de Entrega</p>
+                          <p className="font-medium">{(order as any).especificidadesEntrega}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {extraRightSections.map((section, idx) => (
                   <div key={idx} className="space-y-4">

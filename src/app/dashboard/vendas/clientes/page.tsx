@@ -16,7 +16,7 @@ import {
 import { Customer } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
-import { Plus, Trash2, Edit, Save, Download, Eye } from 'lucide-react';
+import { Plus, Trash2, Edit, Save, Download } from 'lucide-react';
 import { OrderTable } from '@/components/shared';
 import { useRouter } from 'next/navigation';
 import {
@@ -199,6 +199,7 @@ export default function ConfiguracoesPage() {
             <OrderTable
                 orders={customersTableData as any}
                 showSearch
+                onRowClick={(c) => router.push(`/dashboard/vendas/clientes/${c.id}`)}
                 columns={[
                     {
                         key: 'name',
@@ -251,13 +252,6 @@ export default function ConfiguracoesPage() {
                     },
                 ]}
                 actions={[
-                    {
-                        label: 'Visualizar',
-                        icon: <Eye className="w-3.5 h-3.5" />,
-                        variant: 'ghost',
-                        className: 'text-blue-600',
-                        onClick: c => router.push(`/dashboard/vendas/clientes/${c.id}`),
-                    },
                     {
                         label: 'Editar',
                         icon: <Edit className="w-3.5 h-3.5" />,

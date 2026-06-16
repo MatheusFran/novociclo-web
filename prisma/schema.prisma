@@ -140,10 +140,15 @@ model Order {
   departureTime         DateTime?
   deliveryDate          DateTime?
   deliveredAt           DateTime?
+  
 
   // Faturamento
   invoicedAt        DateTime?
   rejectedAt        DateTime?
+  rejectionReason   String?   // Motivo da rejeição financeira
+  rejectedBy        String?   // Quem rejeitou
+  approvedByFinance DateTime?
+  approvedByFinanceUser String? // Quem aprovou financeiramente
   nfNumero          String?
   vendaDiretaNumero String?
 
@@ -153,6 +158,12 @@ model Order {
   approvedAt  DateTime?
   viewedAt    DateTime?
 
+  // Descarga e Entrega
+  meioDescarga          MeioDescarga?
+  responsavelDescarga   ResponsavelDescarga?
+  dataHoraDescarga      DateTime?
+  especificidadesEntrega String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -160,6 +171,7 @@ model Order {
   priceTable PriceTable?  @relation(fields: [priceTableId], references: [id])
   customer   Customer     @relation(fields: [customerId], references: [id])
   crmPipelines  CrmPipeline[]
+  ocorrencias Ocorrencia[]
 
   
 }
@@ -174,6 +186,10 @@ model User {
   lastLogin DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
+  auditLogs             AuditLog[]
 }
 
 model OrderItem {
@@ -224,6 +240,7 @@ model Carregamento {
   id                    String   @id @default(cuid())
   grupoCarga            String   @unique
   tipoCarga             String   // BATIDA | PALETIZADA
+  status                String   @default("CRIADO") // CRIADO, EM_ENTREGA, ENTREGUE, CANCELADO
   dataCarregamento      DateTime
   vehicleId             String?
   scheduledDeliveryDate DateTime?
@@ -239,6 +256,7 @@ model Carregamento {
 
   palets                Palet[]
   paletHistories        PaletHistory[]
+  ocorrencias           Ocorrencia[]
 }
 
 model Palet {
@@ -303,6 +321,16 @@ model CrmPipeline {
   customerId String
   objetivo   String
   coluna     CrmColuna      @default(ENTRADA)
+
+  canal           String?
+  proximaAcao     String?
+  statusCrm       String?
+  resultado       String?
+  valorRecuperado Float?
+  observacao      String?
+  nomeContato     String?
+  ultimoContato   DateTime?
+
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
 
@@ -344,6 +372,7 @@ enum Role {
 
 enum OrderStatus {
   PENDENTE
+  FINANCEIRO
   PRODUCAO
   PRONTO_LOGISTICA
   ENTREGA
@@ -360,5 +389,136 @@ enum ProductionStage {
   CONCLUIDO
 }
 
+enum MeioDescarga {
+  PROPRIO
+  AJUDANTE_EXTERNO
+  EMPILHADEIRA
+}
 
+enum ResponsavelDescarga {
+  CLIENTE
+  LOTUS
+}
+
+enum OcorrenciaStatus {
+  PENDENTE
+  RESOLVIDO
+  CANCELADO
+}
+
+enum OcorrenciaTipo {
+  ENTREGA
+  PRODUTO
+  CLIENTE
+  VEICULO
+  MOTORISTA
+  LOGISTICA
+  OUTRO
+}
+
+model Ocorrencia {
+  id                String   @id @default(cuid())
+  
+  // Relacionamentos
+  orderId           String?
+  carregamentoId    String?
+  
+  // Informações de Ocorrência
+  tipo              OcorrenciaTipo @default(ENTREGA)
+  titulo            String
+  descricao         String
+  status            OcorrenciaStatus @default(PENDENTE)
+  
+  // Informações Relacionadas
+  dataOcorrencia    DateTime @default(now())
+  clienteNome       String?
+  motorista         String?
+  veiculo           String?
+  
+  // Resolução
+  resolucao         String?
+  dataResolucao     DateTime?
+  resolvidoPor      String?
+  
+  // Metadata
+  prioridade        String @default("NORMAL") // BAIXA, NORMAL, ALTA, CRITICA
+  observacoes       String?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  order             Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  carregamento      Carregamento? @relation(fields: [carregamentoId], references: [id], onDelete: SetNull)
+  
+  @@index([orderId])
+  @@index([carregamentoId])
+  @@index([status])
+  @@index([dataOcorrencia])
+}
+
+model SystemConfig {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String // JSON para armazenar qualquer tipo de valor
+  description String?
+  type  String // 'boolean', 'number', 'string', 'select'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  orderId   String?
+  type      NotificationType @default(ORDER_STATUS_CHANGED)
+  title     String
+  message   String
+  data      Json?  // Dados adicionais (ex: old status, new status)
+  read      Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NotificationPreference {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  orderStatusChanged    Boolean  @default(true)
+  orderApprovedFinance  Boolean  @default(true)
+  orderRejected         Boolean  @default(true)
+  orderDelivered        Boolean  @default(true)
+  orderInProduction     Boolean  @default(true)
+  orderInDelivery       Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum NotificationType {
+  ORDER_STATUS_CHANGED
+  ORDER_APPROVED_FINANCE
+  ORDER_REJECTED
+  ORDER_DELIVERED
+  ORDER_IN_PRODUCTION
+  ORDER_IN_DELIVERY
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String   // ex: LOGIN, CREATE_ORDER, UPDATE_ORDER, DELETE_ORDER, APPROVE_ORDER, etc
+  resource  String   // ex: Order, User, Product, etc
+  resourceId String?  // ID do recurso afetado
+  details   String?   // JSON com detalhes da ação
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
 

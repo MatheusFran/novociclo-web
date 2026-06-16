@@ -135,7 +135,7 @@ export function useSystemData() {
     });
   }, []);
 
-  const addCrmPipeline = useCallback(async (data: { customerId: string; objetivo: string }) => {
+  const addCrmPipeline = useCallback(async (data: any) => {
     const created = await api<any>('/api/crm', {
       method: 'POST',
       body: JSON.stringify(data),

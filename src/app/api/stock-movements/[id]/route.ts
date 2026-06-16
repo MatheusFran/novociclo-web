@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/server/auth';
 import { prisma } from '@/server/prisma';
 
 // GET - Buscar uma movimentação específica
@@ -38,11 +40,25 @@ export async function GET(
   }
 }
 
-// DELETE - Deletar uma movimentação (com aviso de auditoria)
+// DELETE - Deletar uma movimentação (somente ADMIN)
 export async function DELETE(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Only ADMIN can delete stock movements
+  if ((session.user as any).role !== 'ADMIN') {
+    return NextResponse.json(
+      { error: 'Forbidden - Only ADMIN can delete stock movements' },
+      { status: 403 }
+    );
+  }
+
   try {
     const { id } = await context.params;
 

@@ -1,7 +1,6 @@
 "use client";
 
 import { useSystemData } from '@/server/store';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -34,6 +33,20 @@ import * as XLSX from 'xlsx';
 // ─────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────
+const CARREGAMENTO_STATUS_COLORS: Record<string, string> = {
+  CRIADO: 'bg-blue-100 text-blue-800 border-blue-200',
+  EM_ENTREGA: 'bg-orange-100 text-orange-800 border-orange-200',
+  ENTREGUE: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  CANCELADO: 'bg-red-100 text-red-800 border-red-200',
+};
+
+const CARREGAMENTO_STATUS_LABELS: Record<string, string> = {
+  CRIADO: 'Criado',
+  EM_ENTREGA: 'Em Entrega',
+  ENTREGUE: 'Entregue',
+  CANCELADO: 'Cancelado',
+};
+
 const STATUS_COLORS: Record<string, string> = {
   AGUARDANDO_FATURAMENTO: 'bg-indigo-100 text-indigo-800 border-indigo-200',
   FATURADO: 'bg-green-100 text-green-800 border-green-200',
@@ -75,11 +88,15 @@ interface LoadingCharge {
   id: string;
   chargeNumber: string;
   grupoCarga: string;
+  status: string; // CRIADO, EM_ENTREGA, ENTREGUE, CANCELADO
+  tipoCarga: string; // PALETIZADA, BATIDA
   cityGroups: CityGroup[];   // pedidos PALETIZADO
   routes: Route[];           // pedidos BATIDA
   totalWeightKg: number;
   totalPalets: number;
   totalRoutes: number;
+  totalSacos: number;
+  totalValor: number;
   createdAt: string;
   observations: string;
 }
@@ -173,7 +190,7 @@ function PaletEditor({ palet, availableItems, products, onUpdate, onDelete, city
       const qty = item.clients.reduce((s, c) => s + c.quantity, 0);
       return `<tr><td style="padding:4px 8px;border:1px solid #ddd;font-size:11px;">${prod?.name || item.productId}</td><td style="padding:4px 8px;border:1px solid #ddd;font-size:11px;text-align:center;font-weight:700;">${qty}</td><td style="padding:4px 8px;border:1px solid #ddd;font-size:10px;color:#555;">${item.clients.map(c => `${c.customerName}: ${c.quantity}`).join(' | ')}</td><td style="padding:4px 8px;border:1px solid #ddd;font-size:11px;text-align:right;">${prodWeight(products, item.productId, qty).toFixed(1)} kg</td></tr>`;
     }).join('');
-    const html = `<!DOCTYPE html><html><body><div style="border:3px solid #222;padding:16px;max-width:600px;font-family:monospace;"><h1 style="font-size:22px;margin:0;">PALETE ${String(palet.number).padStart(3, '0')}</h1><h2 style="font-size:14px;color:#555;margin:4px 0 12px;">📍 ${city}</h2><p style="font-size:13px;font-weight:700;">${clientNames}</p><table style="width:100%;border-collapse:collapse;"><thead><tr><th style="background:#222;color:#fff;padding:5px 8px;font-size:11px;text-align:left;">Produto</th><th style="background:#222;color:#fff;padding:5px 8px;font-size:11px;">Qtd</th><th style="background:#222;color:#fff;padding:5px 8px;font-size:11px;">Detalhes</th><th style="background:#222;color:#fff;padding:5px 8px;font-size:11px;">Peso</th></tr></thead><tbody>${rows}</tbody></table><p style="font-size:11px;margin-top:12px;">${units} un · ${weight.toFixed(1)} kg</p></div><button onclick="window.print()" style="margin-top:12px;padding:8px 16px;cursor:pointer;">🖨️ Imprimir</button></body></html>`;
+    const html = `<!DOCTYPE html><html><body><div style="border:3px solid #222;padding:16px;max-width:600px;font-family:monospace;"><h1 style="font-size:22px;margin:0;">PALETE ${String(palet.number).padStart(3, '0')}</h1><h2 style="font-size:14px;color:#555;margin:4px 0 12px;">${city}</h2><p style="font-size:13px;font-weight:700;">${clientNames}</p><table style="width:100%;border-collapse:collapse;"><thead><tr><th style="background:#222;color:#fff;padding:5px 8px;font-size:11px;text-align:left;">Produto</th><th style="background:#222;color:#fff;padding:5px 8px;font-size:11px;">Qtd</th><th style="background:#222;color:#fff;padding:5px 8px;font-size:11px;">Detalhes</th><th style="background:#222;color:#fff;padding:5px 8px;font-size:11px;">Peso</th></tr></thead><tbody>${rows}</tbody></table><p style="font-size:11px;margin-top:12px;">${units} un · ${weight.toFixed(1)} kg</p></div><button onclick="window.print()" style="margin-top:12px;padding:8px 16px;cursor:pointer;">Imprimir</button></body></html>`;
     const win = window.open('', '_blank');
     win?.document.write(html); win?.document.close();
   };
@@ -318,6 +335,8 @@ export default function CarregamentoPage() {
           Math.abs(c.id.charCodeAt(0) % 1000)
         ).padStart(3, '0')}`,
         grupoCarga: c.grupoCarga,
+        status: (c as any).status || 'CRIADO',
+        tipoCarga: (c as any).tipoCarga || 'PALETIZADA',
         cityGroups: cityGroups as CityGroup[],
         routes: routeOrderIds.map((orderId, idx) => ({
           id: `route_${orderId}_${idx}`,
@@ -329,6 +348,8 @@ export default function CarregamentoPage() {
         totalWeightKg: c.totalPeso,
         totalPalets,
         totalRoutes: routeOrderIds.length,
+        totalSacos: c.totalSacos || 0,
+        totalValor: c.totalValor || 0,
         createdAt: c.createdAt,
         observations: (c as any).observations || '',
       };
@@ -546,9 +567,9 @@ export default function CarregamentoPage() {
     let body = `<h2>Grupo: ${charge.grupoCarga}</h2>`;
 
     if (charge.cityGroups?.length) {
-      body += `<h3>📦 Paletizados</h3>`;
+      body += `<h3>Paletizados</h3>`;
       charge.cityGroups.forEach(cg => {
-        body += `<h4>📍 ${cg.city}</h4>`;
+        body += `<h4>${cg.city}</h4>`;
         cg.palets.forEach(p => {
           const clients = [...new Set(p.items.flatMap(i => i.clients.map(c => c.customerName)))].join(', ');
           body += `<p><strong>Palete ${String(p.number).padStart(3, '0')}</strong> — ${clients}</p><table style="width:100%;border-collapse:collapse;margin-bottom:8px;">`;
@@ -563,11 +584,11 @@ export default function CarregamentoPage() {
     }
 
     if (charge.routes?.length) {
-      body += `<h3>🏠 Batida</h3>`;
+      body += `<h3>Batida</h3>`;
       charge.routes.forEach((route, idx) => {
         const o = orders.find(o => o.id === route.orders[0]);
         if (!o) return;
-        body += `<p><strong>Rota ${idx + 1}</strong> — ${o.customerName} (📍 ${route.destination})</p><table style="width:100%;border-collapse:collapse;margin-bottom:8px;">`;
+        body += `<p><strong>Rota ${idx + 1}</strong> — ${o.customerName} (${route.destination})</p><table style="width:100%;border-collapse:collapse;margin-bottom:8px;">`;
         (o.items as any[]).forEach(item => {
           const prod = products.find((p: any) => p.id === item.productId);
           body += `<tr><td style="border:1px solid #ddd;padding:3px 6px;font-size:10px;">${prod?.name}</td><td style="border:1px solid #ddd;padding:3px 6px;font-size:10px;text-align:center;">${item.quantity} un</td></tr>`;
@@ -576,7 +597,7 @@ export default function CarregamentoPage() {
       });
     }
 
-    const html = `<!DOCTYPE html><html><head><title>Romaneio ${charge.chargeNumber}</title><style>body{font-family:monospace;margin:24px;}h3,h4{border-bottom:1px solid #ccc;padding-bottom:4px;}@media print{button{display:none}}</style></head><body><h1>ROMANEIO DE CARGA</h1><p>${charge.chargeNumber} · ${format(new Date(charge.createdAt), 'dd/MM/yyyy HH:mm')} · ${charge.totalWeightKg.toFixed(1)} kg</p>${body}<button onclick="window.print()" style="margin-top:16px;padding:8px 20px;">🖨️ Imprimir</button></body></html>`;
+    const html = `<!DOCTYPE html><html><head><title>Romaneio ${charge.chargeNumber}</title><style>body{font-family:monospace;margin:24px;}h3,h4{border-bottom:1px solid #ccc;padding-bottom:4px;}@media print{button{display:none}}</style></head><body><h1>ROMANEIO DE CARGA</h1><p>${charge.chargeNumber} · ${format(new Date(charge.createdAt), 'dd/MM/yyyy HH:mm')} · ${charge.totalWeightKg.toFixed(1)} kg</p>${body}<button onclick="window.print()" style="margin-top:16px;padding:8px 20px;">Imprimir</button></body></html>`;
     const win = window.open('', '_blank');
     win?.document.write(html); win?.document.close();
   };
@@ -618,7 +639,7 @@ export default function CarregamentoPage() {
         <h1>PALETE ${String(palet.number).padStart(3, '0')}</h1>
         <p><strong>Carga:</strong> ${chargeNumber}</p>
         <p><strong>Grupo:</strong> ${grupoCarga}</p>
-        <p><strong>Destino:</strong> 📍 ${city}</p>
+        <p><strong>Destino:</strong> ${city}</p>
         <p><strong>Clientes:</strong> ${clientNames}</p>
       </div>
 
@@ -641,7 +662,7 @@ export default function CarregamentoPage() {
       </div>
 
       <div class="footer">
-        <button onclick="window.print()">🖨️ Imprimir</button>
+        <button onclick="window.print()">Imprimir</button>
       </div>
     </body></html>`;
 
@@ -659,81 +680,157 @@ export default function CarregamentoPage() {
     // Info do grupo (pega do primeiro pedido)
     const firstOrder = activeOrders[0] as any;
     const vehicle = firstOrder?.assignedVehicleId ? vehicles.find((v: any) => v.id === firstOrder.assignedVehicleId) : null;
+    const totalWeightAll = activeOrders.reduce((s, o) => s + (o.totalWeight || 0), 0);
+    const totalUnitsAll = activeOrders.reduce((s, o) => s + (o.items as any[]).reduce((ss: number, i: any) => ss + i.quantity, 0), 0);
 
     return (
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 mb-2">
           <Button variant="ghost" size="sm" className="gap-1.5 font-bold text-xs" onClick={() => { setStep('list'); setActiveGrupo(null); }}>
             <ArrowLeft className="w-3.5 h-3.5" /> Voltar
           </Button>
           <div className="flex-1">
-            <h2 className="text-lg font-black uppercase tracking-tight">Montagem de Carga</h2>
-            <p className="text-[10px] font-bold uppercase text-muted-foreground font-mono">{activeGrupo}</p>
+            <div className="flex items-center gap-2 mb-1">
+              <Truck className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-black uppercase tracking-tight">Montagem de Carga</h2>
+            </div>
+            <p className="text-[10px] font-bold uppercase text-muted-foreground font-mono">Grupo: {activeGrupo}</p>
           </div>
+          <Badge className="bg-blue-100 text-blue-800 border-blue-200">{activeOrders.length} pedido{activeOrders.length !== 1 ? 's' : ''}</Badge>
         </div>
 
         {/* Info do grupo */}
-        <Card className="border shadow-sm">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-              <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Veículo</p>
-                <p className="font-bold">{vehicle ? `${vehicle.model} · ${vehicle.plate}` : '—'}</p>
-              </div>
-              <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Data Carregamento</p>
-                <p className="font-bold">{fmtDate(firstOrder?.dataCarregamento, true)}</p>
-              </div>
-              <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Data Entrega</p>
-                <p className="font-bold">{fmtDate(firstOrder?.scheduledDeliveryDate)}</p>
-              </div>
-              <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground mb-0.5">Pedidos</p>
-                <p className="font-bold">{activeOrders.length} · {activeOrders.reduce((s, o) => s + (o.totalWeight || 0), 0).toFixed(1)} kg</p>
-              </div>
+        <div className="p-4 bg-white rounded-lg">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+            <div className="bg-slate-50 rounded-lg border border-slate-200 p-2">
+              <p className="text-[8px] font-black uppercase text-muted-foreground mb-0.5">Veículo</p>
+              <p className="text-[11px] font-bold text-slate-800">{vehicle ? `${vehicle.model}` : '—'}</p>
+              <p className="text-[8px] text-muted-foreground font-mono">{vehicle?.plate || '—'}</p>
             </div>
-          </CardContent>
-        </Card>
+            <div className="bg-slate-50 rounded-lg border border-slate-200 p-2">
+              <p className="text-[8px] font-black uppercase text-muted-foreground mb-0.5">Tipo de Carga</p>
+              <p className="text-[11px] font-bold">{paletizadoOrders.length > 0 ? 'Paletizado' : 'Batida'}{batidaOrders.length > 0 ? ' + Batida' : ''}</p>
+            </div>
+            <div className="bg-slate-50 rounded-lg border border-slate-200 p-2">
+              <p className="text-[8px] font-black uppercase text-muted-foreground mb-0.5">Carregamento</p>
+              <p className="text-[11px] font-bold">{fmtDate(firstOrder?.dataCarregamento)}</p>
+            </div>
+            <div className="bg-slate-50 rounded-lg border border-slate-200 p-2">
+              <p className="text-[8px] font-black uppercase text-muted-foreground mb-0.5">Entrega Prevista</p>
+              <p className="text-[11px] font-bold">{fmtDate(firstOrder?.scheduledDeliveryDate)}</p>
+            </div>
+            <div className="bg-slate-50 rounded-lg border border-slate-200 p-2">
+              <p className="text-[8px] font-black uppercase text-muted-foreground mb-0.5">Total Unidades</p>
+              <p className="text-[13px] font-black text-slate-800">{totalUnitsAll}</p>
+            </div>
+            <div className="bg-slate-50 rounded-lg border border-slate-200 p-2">
+              <p className="text-[8px] font-black uppercase text-muted-foreground mb-0.5">Peso Total</p>
+              <p className="text-[13px] font-black text-slate-800">{totalWeightAll.toFixed(1)} kg</p>
+            </div>
+          </div>
+          {observations && (
+            <div className="mt-3 p-2 bg-slate-50 rounded-lg border border-slate-200 text-[9px]">
+              <p className="font-bold text-slate-800 mb-1">Observações:</p>
+              <p className="text-slate-700">{observations}</p>
+            </div>
+          )}
+        </div>
 
         {/* Seção BATIDA */}
         {batidaOrders.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Home className="w-4 h-4 text-amber-600" />
-              <p className="text-sm font-black uppercase">Batida — {batidaOrders.length} pedido(s)</p>
-              <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[9px]">Entrega Direta</Badge>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 border-b-2 border-slate-200 pb-2">
+              <Home className="w-5 h-5 text-slate-600" />
+              <p className="text-sm font-black uppercase text-slate-700">Entrega por Rota (Batida)</p>
+              <Badge className="bg-slate-100 text-slate-800 border border-slate-300 text-[9px] ml-auto">{batidaOrders.length} rota{batidaOrders.length !== 1 ? 's' : ''}</Badge>
             </div>
-            <div className="space-y-2">
-              {batidaOrders.map((order, idx) => (
-                <div key={order.id} className="border-2 border-amber-200 rounded-xl p-4 bg-amber-50/30">
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div>
-                      <p className="text-sm font-black uppercase">{order.customerName}</p>
-                      <p className="text-[9px] text-muted-foreground font-mono">{order.id} · 📍 {order.city}</p>
+            <div className="space-y-3">
+              {batidaOrders.map((order, idx) => {
+                const orderUnits = (order.items as any[]).reduce((s: number, i: any) => s + i.quantity, 0);
+                const orderWeight = (order.totalWeight || 0);
+                return (
+                  <div key={order.id} className="border-2 border-amber-200 rounded-xl p-4 bg-amber-50/40 hover:shadow-md transition-shadow">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm font-black text-amber-800 bg-amber-200 px-2 py-1 rounded">Rota {idx + 1}</span>
+                          <p className="text-sm font-black text-amber-900">{order.customerName}</p>
+                        </div>
+                        <div className="flex gap-3 text-[9px] text-slate-600">
+                          <span>ID: {order.id}</span>
+                          <span>{order.city}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-center">
+                          <p className="text-[8px] font-bold text-muted-foreground">UNIDADES</p>
+                          <p className="text-2xl font-black text-amber-700">{orderUnits}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[8px] font-bold text-muted-foreground">PESO</p>
+                          <p className="text-2xl font-black text-amber-700">{orderWeight.toFixed(1)}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-[9px]">{(order.items as any[]).reduce((s: number, i: any) => s + i.quantity, 0)} un</Badge>
-                      <Badge variant="outline" className="text-[9px]">{(order.totalWeight || 0).toFixed(1)} kg</Badge>
-                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDetalhesOrder(order)}>
-                        <Eye className="w-3.5 h-3.5" />
+
+                    {/* Produtos */}
+                    <div className="bg-white rounded-lg border border-amber-100 p-3 mb-3 space-y-1.5">
+                      {(order.items as any[]).map(item => {
+                        const prod = products.find((p: any) => p.id === item.productId);
+                        const itemWeight = prodWeight(products, item.productId, item.quantity);
+                        return (
+                          <div key={item.productId} className="flex justify-between items-center py-1 border-b border-amber-50 last:border-0">
+                            <div>
+                              <p className="text-[11px] font-bold text-slate-800">{prod?.name || item.productId}</p>
+                              <p className="text-[8px] text-muted-foreground">{prod?.uom || 'UN'}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[11px] font-bold text-amber-800">{item.quantity} un</p>
+                              <p className="text-[9px] text-muted-foreground">{itemWeight.toFixed(2)} kg</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Descarga e Entrega */}
+                    {((order as any).meioDescarga || (order as any).responsavelDescarga || (order as any).dataHoraDescarga || (order as any).especificidadesEntrega) && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2 mb-3">
+                        <p className="text-[9px] font-black uppercase text-slate-900">Orientações de Descarga</p>
+                        <div className="grid grid-cols-2 gap-3 text-[9px]">
+                          {(order as any).meioDescarga && (
+                            <div className="bg-white rounded p-2 border border-slate-100">
+                              <p className="text-[8px] font-bold text-slate-700 mb-0.5">Meio:</p>
+                              <p className="font-bold text-slate-900">
+                                {(order as any).meioDescarga === 'PROPRIO' ? 'Próprio' : 
+                                 (order as any).meioDescarga === 'AJUDANTE_EXTERNO' ? 'Ajudante' : 
+                                 'Empilhadeira'}
+                              </p>
+                            </div>
+                          )}
+                          {(order as any).responsavelDescarga && (
+                            <div className="bg-white rounded p-2 border border-slate-100">
+                              <p className="text-[8px] font-bold text-slate-700 mb-0.5">Responsável:</p>
+                              <p className="font-bold text-slate-900">
+                                {(order as any).responsavelDescarga === 'CLIENTE' ? 'Cliente' : 'Lotus'}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Botões de ação */}
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold flex-1" onClick={() => setDetalhesOrder(order)}>
+                        <Eye className="w-3.5 h-3.5" /> Detalhes
                       </Button>
                     </div>
                   </div>
-                  <div className="bg-white rounded-lg p-2 divide-y">
-                    {(order.items as any[]).map(item => {
-                      const prod = products.find((p: any) => p.id === item.productId);
-                      return (
-                        <div key={item.productId} className="flex justify-between py-1.5 text-xs">
-                          <span className="font-bold">{prod?.name || item.productId}</span>
-                          <span className="text-muted-foreground">{item.quantity} un · {prodWeight(products, item.productId, item.quantity).toFixed(1)} kg</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -741,10 +838,10 @@ export default function CarregamentoPage() {
         {/* Seção PALETIZADO */}
         {paletizadoOrders.length > 0 && (
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Layers className="w-4 h-4 text-blue-600" />
-              <p className="text-sm font-black uppercase">Paletizado — {paletizadoOrders.length} pedido(s)</p>
-              <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[9px]">Montagem por Palete</Badge>
+            <div className="flex items-center gap-2 border-b-2 border-slate-200 pb-2">
+              <Layers className="w-5 h-5 text-slate-600" />
+              <p className="text-sm font-black uppercase text-slate-700">Montagem por Palete</p>
+              <Badge className="bg-slate-100 text-slate-800 border border-slate-300 text-[9px] ml-auto">{paletizadoOrders.length} grupo{paletizadoOrders.length !== 1 ? 's' : ''} de cidades</Badge>
             </div>
 
             {Object.entries(selectedByCity).map(([city, cityOrders]) => {
@@ -752,25 +849,39 @@ export default function CarregamentoPage() {
               const progress = cityProgress(city);
 
               return (
-                <div key={city} className="border rounded-xl overflow-hidden shadow-sm">
-                  <div className={`px-4 py-3 flex items-center justify-between ${progress.done ? 'bg-green-50' : 'bg-primary/5'}`}>
-                    <div className="flex items-center gap-2">
-                      <MapPin className={`w-3.5 h-3.5 ${progress.done ? 'text-green-600' : 'text-primary'}`} />
-                      <p className={`text-[10px] font-black uppercase tracking-widest ${progress.done ? 'text-green-700' : 'text-primary'}`}>{city}</p>
-                      {progress.done && <Badge className="bg-green-100 text-green-700 border-green-200 text-[8px]">✓ Completo</Badge>}
+                <div key={city} className="border-2 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                  {/* Header da cidade */}
+                  <div className={`px-4 py-4 flex items-center justify-between ${progress.done ? 'bg-emerald-50 border-b-2 border-emerald-200' : 'bg-blue-50 border-b-2 border-blue-200'}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${progress.done ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-800'}`}>
+                        {progress.done ? '✓' : '◐'}
+                      </div>
+                      <div>
+                        <p className={`text-[11px] font-black uppercase tracking-widest ${progress.done ? 'text-emerald-800' : 'text-slate-800'}`}>{city}</p>
+                        {progress.done && <p className="text-[8px] text-emerald-700 font-bold">Todos os itens alocados</p>}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-[9px] bg-white">{cityOrders.length} ped.</Badge>
-                      <Badge variant="outline" className={`text-[9px] bg-white ${progress.done ? 'border-green-300 text-green-700' : ''}`}>
-                        {progress.allocated}/{progress.needed} un
-                      </Badge>
-                      <Badge variant="outline" className="text-[9px] bg-white">{palets.length} paletes</Badge>
+                      <div className="text-right">
+                        <p className="text-[8px] font-bold text-muted-foreground mb-0.5">ALOCAÇÃO</p>
+                        <p className={`text-[12px] font-black ${progress.done ? 'text-emerald-700' : 'text-slate-700'}`}>
+                          {progress.allocated}/{progress.needed} un
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[8px] font-bold text-muted-foreground mb-0.5">PALETES</p>
+                        <p className="text-[12px] font-black text-slate-700">{palets.length}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[8px] font-bold text-muted-foreground mb-0.5">PEDIDOS</p>
+                        <p className="text-[12px] font-black text-slate-700">{cityOrders.length}</p>
+                      </div>
                     </div>
                   </div>
 
                   <div className="bg-white p-4 space-y-4">
                     {/* Tabela de pedidos/alocação */}
-                    <div className="bg-zinc-50 rounded-lg overflow-hidden">
+                    <div className="bg-slate-50 rounded-lg overflow-hidden">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -807,6 +918,46 @@ export default function CarregamentoPage() {
                       </Table>
                     </div>
 
+                    {/* Informações de Descarga por Pedido */}
+                    {cityOrders.some((o: any) => o.meioDescarga || o.responsavelDescarga || o.dataHoraDescarga || o.especificidadesEntrega) && (
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 space-y-2">
+                        <p className="text-[9px] font-black uppercase text-slate-900 mb-3">Descarga por Pedido</p>
+                        <div className="space-y-2">
+                          {cityOrders.filter((o: any) => o.meioDescarga || o.responsavelDescarga || o.dataHoraDescarga || o.especificidadesEntrega).map((order: any) => (
+                            <div key={order.id} className="bg-white border border-purple-100 rounded p-2">
+                              <p className="text-[9px] font-bold text-purple-900 mb-1">{order.customerName}</p>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[8px]">
+                                {order.meioDescarga && (
+                                  <div>
+                                    <span className="text-muted-foreground">Meio:</span>
+                                    <p className="font-bold">{order.meioDescarga === 'PROPRIO' ? 'Próprio' : order.meioDescarga === 'AJUDANTE_EXTERNO' ? 'Externo' : 'Empilhadeira'}</p>
+                                  </div>
+                                )}
+                                {order.responsavelDescarga && (
+                                  <div>
+                                    <span className="text-muted-foreground">Resp:</span>
+                                    <p className="font-bold">{order.responsavelDescarga === 'CLIENTE' ? 'Cliente' : 'Lotus'}</p>
+                                  </div>
+                                )}
+                                {order.dataHoraDescarga && (
+                                  <div>
+                                    <span className="text-muted-foreground">Data/Hora:</span>
+                                    <p className="font-bold">{fmtDate(order.dataHoraDescarga, true)}</p>
+                                  </div>
+                                )}
+                                {order.especificidadesEntrega && (
+                                  <div className="col-span-2">
+                                    <span className="text-muted-foreground">Observações:</span>
+                                    <p className="font-bold italic truncate" title={order.especificidadesEntrega}>{order.especificidadesEntrega}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Paletes */}
                     <div className="space-y-3">
                       {palets.map((palet, idx) => (
@@ -833,35 +984,40 @@ export default function CarregamentoPage() {
         )}
 
         {/* Footer fechar carga */}
-        <Card className="border-none shadow-sm bg-zinc-900 text-white">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-6 flex-wrap">
-                {[
-                  { label: 'Paletes', value: Object.values(cityPalets).flat().length },
-                  { label: 'Rotas', value: batidaOrders.length },
-                  { label: 'Peso', value: `${(Object.values(cityPalets).flat().reduce((s, p) => s + paletWeight(p, products), 0) + batidaOrders.reduce((s, o) => s + (o.totalWeight || 0), 0)).toFixed(1)} kg` },
-                ].map(item => (
-                  <div key={item.label}>
-                    <p className="text-[9px] font-black uppercase opacity-50">{item.label}</p>
-                    <p className="text-xl font-black">{item.value}</p>
-                  </div>
-                ))}
-              </div>
-              <div className="space-y-2 w-full md:w-64">
+        <div className="p-6 space-y-4 bg-white rounded-lg">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center gap-6 flex-wrap">
+              {[
+                { label: 'Paletes', value: Object.values(cityPalets).flat().length, color: 'bg-slate-500/20 text-slate-300' },
+                { label: 'Rotas', value: batidaOrders.length, color: 'bg-slate-500/20 text-slate-300' },
+                { label: 'Peso Total', value: `${(Object.values(cityPalets).flat().reduce((s, p) => s + paletWeight(p, products), 0) + batidaOrders.reduce((s, o) => s + (o.totalWeight || 0), 0)).toFixed(1)} kg`, color: 'bg-slate-500/20 text-slate-300' },
+                { label: 'Total de Unidades', value: Object.values(cityPalets).flat().reduce((s, p) => s + paletUnits(p), 0) + (batidaOrders.reduce((s, o) => s + (o.items as any[]).reduce((ss: number, i: any) => ss + i.quantity, 0), 0)), color: 'bg-slate-500/20 text-slate-300' },
+              ].map(item => (
+                <div key={item.label} className={`rounded-lg px-3 py-2 ${item.color}`}>
+                  <p className="text-[9px] font-black uppercase opacity-70">{item.label}</p>
+                  <p className="text-lg font-black">{item.value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2 w-full md:w-80">
+              <div>
+                <label className="text-[9px] font-bold uppercase text-slate-700 block mb-1">Observações Adicionais (opcional)</label>
                 <Input
-                  placeholder="Observações (opcional)"
-                  className="h-8 text-xs bg-white/10 border-white/20 text-white placeholder:text-white/40"
+                  placeholder="Ex: Carga urgente, cliente especial, cuidado com produtos frágeis..."
+                  className="h-8 text-xs bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400"
                   value={observations}
                   onChange={e => setObservations(e.target.value)}
                 />
-                <Button className="w-full bg-green-500 hover:bg-green-400 text-white font-black text-xs uppercase gap-2" onClick={handleSave}>
-                  <CheckCircle2 className="w-4 h-4" /> Fechar Carga
-                </Button>
               </div>
+              <Button 
+                className="w-full bg-primary hover:bg-primary text-white font-black text-sm uppercase gap-2 h-10" 
+                onClick={handleSave}
+              >
+                <CheckCircle2 className="w-5 h-5" /> Fechar e Confirmar Carga
+              </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Confirm dialog */}
         <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
@@ -901,11 +1057,11 @@ export default function CarregamentoPage() {
   // ─── STEP: LIST ───────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+      {/* <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <SummaryCard label="Grupos Pendentes" value={Object.keys(grupoMap).length} unit="grupos" color="info" />
         <SummaryCard label="Cargas Fechadas" value={charges.length} unit="cargas" color="success" />
         <SummaryCard label="Peso Pendente" value={`${(totalWeightPending / 1000).toFixed(1)} ton`} unit="" color="primary" />
-      </div>
+      </div> */}
 
       <Tabs defaultValue="pendentes" className="w-full">
         <TabsList className="grid w-full max-w-[400px] grid-cols-2">
@@ -933,14 +1089,13 @@ export default function CarregamentoPage() {
           />
 
           {gruposFiltered.length === 0 && (
-            <Card className="border-none shadow-sm">
-              <CardContent className="py-16 text-center text-muted-foreground italic text-xs uppercase opacity-40">
-                Nenhum grupo pendente.
-              </CardContent>
-            </Card>
+            <div className="py-16 text-center text-muted-foreground italic text-xs uppercase opacity-40">
+              Nenhum grupo pendente.
+            </div>
           )}
 
           <div className="space-y-3">
+
             {gruposFiltered.map(([grupo, gOrders]) => {
               const first = gOrders[0] as any;
               const vehicle = first?.assignedVehicleId ? vehicles.find((v: any) => v.id === first.assignedVehicleId) : null;
@@ -951,45 +1106,43 @@ export default function CarregamentoPage() {
               const nBat = gOrders.filter(o => (o as any).tipoCarga !== 'PALETIZADA').length;
 
               return (
-                <Card key={grupo} className="border shadow-sm hover:shadow-md transition-shadow">
-                  <CardContent className="p-5">
-                    <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
-                      <div className="space-y-2 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-black font-mono text-primary">{grupo}</p>
-                          {nPal > 0 && <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[9px]"><Layers className="w-3 h-3 mr-1" />{nPal} Paletizado</Badge>}
-                          {nBat > 0 && <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[9px]"><Home className="w-3 h-3 mr-1" />{nBat} Batida</Badge>}
+                <div key={grupo} className="border shadow-sm hover:shadow-md transition-shadow rounded-lg p-5 bg-white">
+                  <div className="flex flex-col md:flex-row md:items-center gap-4 justify-between">
+                    <div className="space-y-2 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-black font-mono text-primary">{grupo}</p>
+                        {nPal > 0 && <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-[9px]"><Layers className="w-3 h-3 mr-1" />{nPal} Paletizado</Badge>}
+                        {nBat > 0 && <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[9px]"><Home className="w-3 h-3 mr-1" />{nBat} Batida</Badge>}
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                        <div>
+                          <p className="text-[9px] font-black uppercase text-muted-foreground">Veículo</p>
+                          <p className="font-bold">{vehicle ? `${vehicle.model} · ${vehicle.plate}` : '—'}</p>
                         </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                          <div>
-                            <p className="text-[9px] font-black uppercase text-muted-foreground">Veículo</p>
-                            <p className="font-bold">{vehicle ? `${vehicle.model} · ${vehicle.plate}` : '—'}</p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] font-black uppercase text-muted-foreground">Carregamento</p>
-                            <p className="font-bold">{fmtDate(first?.dataCarregamento, true)}</p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] font-black uppercase text-muted-foreground">Entrega</p>
-                            <p className="font-bold">{fmtDate(first?.scheduledDeliveryDate)}</p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] font-black uppercase text-muted-foreground">Cidades</p>
-                            <p className="font-bold">{cidades.join(', ') || '—'}</p>
-                          </div>
+                        <div>
+                          <p className="text-[9px] font-black uppercase text-muted-foreground">Carregamento</p>
+                          <p className="font-bold">{fmtDate(first?.dataCarregamento, true)}</p>
                         </div>
-                        <div className="flex gap-2 flex-wrap">
-                          <Badge variant="outline" className="text-[9px]">{gOrders.length} pedidos</Badge>
-                          <Badge variant="outline" className="text-[9px]">{totalSacs} un</Badge>
-                          <Badge variant="outline" className="text-[9px]">{totalKg.toFixed(1)} kg</Badge>
+                        <div>
+                          <p className="text-[9px] font-black uppercase text-muted-foreground">Entrega</p>
+                          <p className="font-bold">{fmtDate(first?.scheduledDeliveryDate)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black uppercase text-muted-foreground">Cidades</p>
+                          <p className="font-bold">{cidades.join(', ') || '—'}</p>
                         </div>
                       </div>
-                      <Button className="font-black text-xs uppercase gap-2 shrink-0" onClick={() => openGrupo(grupo)}>
-                        <Layers className="w-4 h-4" /> Montar Carga
-                      </Button>
+                      <div className="flex gap-2 flex-wrap">
+                        <Badge variant="outline" className="text-[9px]">{gOrders.length} pedidos</Badge>
+                        <Badge variant="outline" className="text-[9px]">{totalSacs} un</Badge>
+                        <Badge variant="outline" className="text-[9px]">{totalKg.toFixed(1)} kg</Badge>
+                      </div>
                     </div>
-                  </CardContent>
-                </Card>
+                    <Button className="font-black text-xs uppercase gap-2 shrink-0" onClick={() => openGrupo(grupo)}>
+                      <Layers className="w-4 h-4" /> Montar Carga
+                    </Button>
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -1016,9 +1169,7 @@ export default function CarregamentoPage() {
           />
 
           {historicoChargesFiltered.length === 0 ? (
-            <Card className="border-none shadow-sm">
-              <CardContent className="py-16 text-center text-muted-foreground italic text-xs uppercase opacity-40">Nenhuma carga encontrada.</CardContent>
-            </Card>
+            <div className="py-16 text-center text-muted-foreground italic text-xs uppercase opacity-40">Nenhuma carga encontrada.</div>
           ) : (
             <div className="space-y-3">
               {charges
@@ -1038,57 +1189,90 @@ export default function CarregamentoPage() {
                 })
                 .map(charge => (
                   <Collapsible key={charge.id} open={expandedCharge === charge.id} onOpenChange={() => setExpandedCharge(expandedCharge === charge.id ? null : charge.id)}>
-                    <Card className="border-none shadow-sm overflow-hidden">
+                    <div className="border-none shadow-sm overflow-hidden rounded-lg bg-white">
                       <CollapsibleTrigger asChild>
-                        <CardContent className="p-4 cursor-pointer hover:bg-muted/20 transition-colors">
+                        <div className="p-4 cursor-pointer hover:bg-muted/20 transition-colors">
                           <div className="flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center">
-                                <Truck className="w-4 h-4 text-primary" />
+                            <div className="flex items-center gap-3 flex-1">
+                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xs ${CARREGAMENTO_STATUS_COLORS[charge.status] || CARREGAMENTO_STATUS_COLORS['CRIADO']}`}>
+                                {charge.status.charAt(0)}
                               </div>
-                              <div>
-                                <p className="text-sm font-black text-primary">{charge.chargeNumber}</p>
-                                <p className="text-[9px] text-muted-foreground font-mono">{charge.grupoCarga} · {charge.totalPalets} paletes · {charge.totalRoutes} rotas · {charge.totalWeightKg.toFixed(1)} kg</p>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="text-sm font-black text-primary truncate">{charge.chargeNumber}</p>
+                                  <Badge className={`text-[9px] ${CARREGAMENTO_STATUS_COLORS[charge.status] || CARREGAMENTO_STATUS_COLORS['CRIADO']}`}>
+                                    {CARREGAMENTO_STATUS_LABELS[charge.status] || 'Status'}
+                                  </Badge>
+                                </div>
+                                <div className="grid grid-cols-3 gap-4 text-[9px]">
+                                  <div>
+                                    <span className="font-bold text-muted-foreground">Grupo:</span> {charge.grupoCarga}
+                                  </div>
+                                  <div>
+                                    <span className="font-bold text-muted-foreground">Tipo:</span> {charge.tipoCarga === 'PALETIZADA' ? 'Paletizado' : 'Batida'}
+                                  </div>
+                                  <div>
+                                    <span className="font-bold text-muted-foreground">Data:</span> {fmtDate(charge.createdAt, true)}
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-4 gap-3 text-[9px] mt-2">
+                                  <div className="bg-slate-50 px-2 py-1 rounded border border-slate-200">
+                                    <span className="font-bold text-slate-700">{charge.totalPalets}</span> palete{charge.totalPalets !== 1 ? 's' : ''}
+                                  </div>
+                                  <div className="bg-slate-50 px-2 py-1 rounded border border-slate-200">
+                                    <span className="font-bold text-slate-700">{charge.totalRoutes}</span> rota{charge.totalRoutes !== 1 ? 's' : ''}
+                                  </div>
+                                  <div className="bg-slate-50 px-2 py-1 rounded border border-slate-200">
+                                    <span className="font-bold text-slate-700">{charge.totalWeightKg.toFixed(1)}</span> kg
+                                  </div>
+                                  <div className="bg-slate-50 px-2 py-1 rounded border border-slate-200">
+                                    <span className="font-bold text-slate-700">{charge.totalSacos}</span> un
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[9px] text-muted-foreground">{fmtDate(charge.createdAt, true)}</span>
+                            <div className="flex items-center gap-2 shrink-0">
                               {expandedCharge === charge.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                             </div>
                           </div>
-                        </CardContent>
+                        </div>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        <CardContent className="px-4 pb-4 pt-0 border-t space-y-3">
-                          {charge.observations && <p className="text-[10px] text-muted-foreground bg-muted/30 rounded p-2">{charge.observations}</p>}
+                        <div className="px-4 pb-4 pt-0 border-t space-y-4">
+                          {charge.observations && (
+                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                              <p className="text-[10px] font-bold text-slate-700 mb-1">Observações:</p>
+                              <p className="text-[10px] text-slate-700">{charge.observations}</p>
+                            </div>
+                          )}
 
                           {/* Paletes */}
                           {charge.cityGroups?.length > 0 && (
                             <div className="space-y-2">
-                              <p className="text-[10px] font-black uppercase text-blue-700 flex items-center gap-1"><Layers className="w-3.5 h-3.5" /> Paletizados</p>
+                              <p className="text-[10px] font-black uppercase text-slate-700">Paletizados ({charge.cityGroups.reduce((s, cg) => s + cg.palets.length, 0)} paletes)</p>
                               {charge.cityGroups.map((cg, i) => (
-                                <div key={i}>
-                                  <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">📍 {cg.city}</p>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <div key={i} className="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
+                                  <p className="text-[10px] font-black uppercase text-slate-700 mb-2">{cg.city}</p>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                                     {cg.palets.map(p => {
                                       const clients = [...new Set(p.items.flatMap(i => i.clients.map(c => c.customerName)))].join(', ');
                                       return (
-                                        <div key={p.id} className="border border-blue-200 rounded-lg p-2 bg-blue-50/30">
+                                        <div key={p.id} className="border border-slate-200 rounded-lg p-2 bg-white">
                                           <div className="flex justify-between items-start gap-2 mb-1">
                                             <div>
-                                              <p className="text-[10px] font-black text-blue-700">Palete {String(p.number).padStart(3, '0')}</p>
-                                              <p className="text-[9px] text-muted-foreground">{paletUnits(p)} un · {paletWeight(p, products).toFixed(1)} kg</p>
+                                              <p className="text-[11px] font-black text-slate-800">Palete {String(p.number).padStart(3, '0')}</p>
+                                              <p className="text-[9px] text-slate-600 font-semibold">{paletUnits(p)} un · {paletWeight(p, products).toFixed(2)} kg</p>
                                             </div>
                                             <Button
                                               size="sm"
                                               variant="ghost"
-                                              className="h-6 px-2 text-[9px] font-bold text-blue-600 hover:text-blue-800 shrink-0"
+                                              className="h-6 px-1.5 text-[9px] font-bold text-slate-600 hover:text-slate-800 hover:bg-slate-100 shrink-0"
                                               onClick={() => printPaletDetails(p, cg.city, charge.chargeNumber, charge.grupoCarga)}
                                             >
                                               <Printer className="w-3 h-3" />
                                             </Button>
                                           </div>
-                                          <p className="text-[8px] text-muted-foreground">{clients}</p>
+                                          <p className="text-[8px] text-slate-700 line-clamp-2 leading-tight">{clients}</p>
                                         </div>
                                       );
                                     })}
@@ -1101,17 +1285,22 @@ export default function CarregamentoPage() {
                           {/* Rotas */}
                           {charge?.routes?.length > 0 && (
                             <div className="space-y-2">
-                              <p className="text-[10px] font-black uppercase text-amber-700 flex items-center gap-1"><Home className="w-3.5 h-3.5" /> Batida</p>
+                              <p className="text-[10px] font-black uppercase text-slate-700">Batida ({charge.routes.length} rota{charge.routes.length !== 1 ? 's' : ''})</p>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                 {charge.routes.map((route, idx) => {
                                   const o = orders.find(o => o.id === route.orders[0]);
                                   return (
-                                    <div key={route.id} className="border border-amber-200 rounded-lg p-2 bg-amber-50/30">
-                                      <div className="flex justify-between">
-                                        <p className="text-[10px] font-black text-amber-700">{idx + 1}. {o?.customerName || '—'}</p>
-                                        <p className="text-[9px] text-muted-foreground">{route.totalUnits} un · {route.totalWeightKg.toFixed(1)} kg</p>
+                                    <div key={route.id} className="border border-slate-200 rounded-lg p-3 bg-slate-50/50">
+                                      <div className="flex justify-between items-start mb-1">
+                                        <div>
+                                          <p className="text-[11px] font-black text-slate-800">Rota {idx + 1}</p>
+                                          <p className="text-[10px] font-semibold text-slate-700">{o?.customerName || '—'}</p>
+                                        </div>
+                                        <span className="text-[9px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                                          {route.totalUnits} un
+                                        </span>
                                       </div>
-                                      <p className="text-[8px] text-muted-foreground">📍 {route.destination}</p>
+                                      <p className="text-[9px] text-slate-600">{route.destination} · {route.totalWeightKg.toFixed(2)} kg</p>
                                     </div>
                                   );
                                 })}
@@ -1119,17 +1308,24 @@ export default function CarregamentoPage() {
                             </div>
                           )}
 
-                          <div className="flex gap-2 pt-2 border-t">
-                            <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold flex-1" onClick={() => printRomaneio(charge)}>
+                          {/* Ações */}
+                          <div className="flex gap-2 pt-2 border-t flex-wrap">
+                            <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold flex-1 min-w-[120px]" onClick={() => printRomaneio(charge)}>
                               <Printer className="w-3.5 h-3.5" /> Romaneio
                             </Button>
-                            <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold flex-1" onClick={() => handleExport(charge)}>
+                            <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold flex-1 min-w-[120px]" onClick={() => handleExport(charge)}>
                               <Download className="w-3.5 h-3.5" /> Exportar
                             </Button>
+                            <Button size="sm" variant="outline" className="gap-1.5 text-xs font-bold" title="Copiar número da carga" onClick={() => {
+                              navigator.clipboard.writeText(charge.chargeNumber);
+                              toast({ title: 'Copiado!', description: charge.chargeNumber });
+                            }}>
+                              <Package className="w-3.5 h-3.5" />
+                            </Button>
                           </div>
-                        </CardContent>
+                        </div>
                       </CollapsibleContent>
-                    </Card>
+                    </div>
                   </Collapsible>
                 ))}
             </div>

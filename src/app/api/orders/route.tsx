@@ -32,17 +32,16 @@ export async function POST(request: NextRequest) {
 
   try {
     let customerId: string;
-    const existingCustomer = data.cpfcnpj
-      ? await prisma.customer.findFirst({ where: { cpfcnpj: data.cpfcnpj } })
-      : null;
-
-    if (existingCustomer) {
-      customerId = existingCustomer.id;
+    
+    // Se o customerId já vem do frontend, usa direto
+    if (data.customerId) {
+      customerId = data.customerId;
     } else {
+      // Senão, cria novo cliente
       const newCustomer = await prisma.customer.create({
         data: {
           name: data.customerName || 'Sem Nome',
-          cpfcnpj: data.cpfcnpj || null,
+          cpfcnpj: data.customerCpfCnpj || null,
           phone: data.customerPhone || null,
           email: data.customerEmail || null,
           address: data.customerAddress || null,
@@ -71,6 +70,7 @@ export async function POST(request: NextRequest) {
       totalValue: data.totalValue ?? 0,
       totalWeight: data.totalWeight ?? 0,
       observations: data.observations ?? null,
+      createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
       assignedVehicleId: null,
       assignedDriverId: null,
       departureTime: null,
@@ -82,6 +82,10 @@ export async function POST(request: NextRequest) {
       approvedAt: null,
       viewedAt: null,
       productionStage: null,
+      meioDescarga: data.meioDescarga ?? null,
+      responsavelDescarga: data.responsavelDescarga ?? null,
+      dataHoraDescarga: data.dataHoraDescarga ? new Date(data.dataHoraDescarga) : null,
+      especificidadesEntrega: data.especificidadesEntrega ?? null,
     };
 
 

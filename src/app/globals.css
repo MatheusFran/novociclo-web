@@ -23,7 +23,7 @@
     --border: 140 20% 85%;
     --input: 140 20% 85%;
     --ring: 153 67% 28%;
-    --radius: 0.75rem;
+    --radius: 0.2rem;
     --chart-1: 153 67% 28%;
     --chart-2: 84 50% 45%;
     --chart-3: 30 40% 30%; /* Marrom */
@@ -79,6 +79,8 @@
     display: block !important;
   }
 
+  /* ... rest of print ... */
+
   body {
     background: white !important;
     color: black !important;
@@ -116,4 +118,23 @@
 
 .print-only {
   display: none;
+}
+
+/* Scrollbars Corporativas */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* slate-300 */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8; /* slate-400 */
 }

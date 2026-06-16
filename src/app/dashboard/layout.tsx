@@ -1,31 +1,23 @@
 'use client';
 
+import React from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import {
   LayoutDashboard,
   ShoppingCart,
   Package,
   Users,
-  LogOut,
-  Truck,
-  FileCheck,
   Settings,
-  ChevronDown,
-  ChevronRight,
-  BoxesIcon,
   TrendingUp,
-  Handshake,
-  CreditCard,
-  Dock,
-  ShoppingBag,
   Factory,
-  Box,
-  CirclePercent,
-  Warehouse,
+  BarChart3,
+  Truck,
+  CreditCard,
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { ChevronRight } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -38,220 +30,127 @@ import {
   SidebarTrigger,
   SidebarInset,
 } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ProtectedRoute } from '@/components/settings/protected-route';
-import { useState } from 'react';
+import {
+  SidebarHeaderComponent,
+  SimpleMenuItem,
+  SidebarFooterComponent,
+  DASHBOARD_MENU_CONFIG,
+} from '@/components/dashboard/sidebar';
+import { NotificationCenter } from '@/components/notifications';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
 
-  const isProducaoActive =
-    pathname === '/dashboard/producao' || pathname === '/dashboard/logistica/estoque';
+  const isProducaoActive = pathname.startsWith('/dashboard/producao');
 
-  const isVendasActive =
-    pathname === '/dashboard/vendas/pedidos' || pathname === '/dashboard/vendas/crm';
+  const isVendasActive = pathname.startsWith('/dashboard/vendas');
 
+  const isRelatoriosActive =
+    pathname.startsWith('/dashboard/relatorios');
 
+  const isLogisticaActive =
+    pathname.startsWith('/dashboard/logistica');
 
-  const [producaoOpen, setProducaoOpen] = useState(isProducaoActive);
-  const [vendasOpen, setVendasOpen] = useState(isVendasActive);
-
-  const topItems = [
-    { label: 'Visão Geral', icon: LayoutDashboard, path: '/dashboard' },
-  ];
-
-  const vendasSubItems = [
-    { label: 'Pedidos de Venda', icon: ShoppingCart, path: '/dashboard/vendas/pedidos' },
-    { label: 'CRM', icon: Handshake, path: '/dashboard/vendas/crm' },
-    { label: 'Cotação', icon: FileCheck, path: '/dashboard/vendas/cotacao' },
-    { label: 'Clientes', icon: Users, path: '/dashboard/vendas/clientes' },
-    { label: 'Preços e Equipe', icon: CirclePercent, path: '/dashboard/vendas/configuracoes' },
-  ];
-
-  const producaoSubItems = [
-    { label: 'Fila de Produção', icon: Warehouse, path: '/dashboard/producao/fila' },
-    { label: 'Estoque', icon: Box, path: '/dashboard/producao/estoque' },
-    { label: 'Carregamento', icon: BoxesIcon, path: '/dashboard/producao/carregamento' },
-    { label: 'Produtos', icon: ShoppingBag, path: '/dashboard/producao/produtos' },
-  ];
-
-
+  const isFinanceiroActive =
+    pathname.startsWith('/dashboard/financeiro');
 
   const bottomItems = [
-    { label: 'Entregas', icon: Truck, path: '/dashboard/logistica' },
-    { label: 'Configurações', icon: Settings, path: '/dashboard/configuracoes' },
-    ...(user?.role === 'ADMIN' ? [{ label: 'Usuários', icon: Users, path: '/dashboard/usuarios' }] : []),
+    { label: 'Configurações', icon: 'Settings', path: '/dashboard/configuracoes' },
   ];
 
-  const allMenuItems = [...topItems, ...bottomItems];
-  const currentLabel = producaoSubItems.find(i => i.path === pathname)?.label
-    || vendasSubItems.find(i => i.path === pathname)?.label
-    || allMenuItems.find(m => m.path === pathname)?.label
-    || (isProducaoActive ? 'Produção' : isVendasActive ? 'Vendas' : 'Sistema');
+  const { topItems } = DASHBOARD_MENU_CONFIG;
+
+  const mainCategories = [
+    { label: 'Vendas', icon: 'TrendingUp', path: '/dashboard/vendas', isActive: isVendasActive },
+    { label: 'Produção', icon: 'Factory', path: '/dashboard/producao', isActive: isProducaoActive },
+    { label: 'Financeiro', icon: 'CreditCard', path: '/dashboard/financeiro', isActive: isFinanceiroActive },
+    { label: 'Logística', icon: 'Truck', path: '/dashboard/logistica', isActive: isLogisticaActive },
+    { label: 'Relatórios', icon: 'BarChart3', path: '/dashboard/relatorios', isActive: isRelatoriosActive },
+  ];
 
   return (
     <ProtectedRoute requireAuth>
-      <SidebarProvider>
-        <Sidebar collapsible="icon" className="no-print bg-white [&>*]:bg-white">
+      <SidebarProvider style={{ "--sidebar-width": "14rem" } as React.CSSProperties}>
+        <Sidebar collapsible="icon" className="no-print sticky top-0 z-30 h-screen bg-primary border-r border-primary [&>*]:bg-transparent">
 
-          <SidebarHeader className="h-20 flex items-center justify-center px-4">
-            <Link href="/dashboard" className="flex items-center gap-3 group w-full">
-              <div className="w-48 h-14 relative overflow-hidden rounded-xl bg-white shadow-lg border-2 border-primary/20 group-data-[collapsible=icon]:w-12 group-data-[collapsible=icon]:h-12 transition-all duration-300">
-                <Image src="/logo.png" alt="Logo Novo Ciclo" fill className="object-contain p-1.5" />
-              </div>
-            </Link>
+          <SidebarHeader className="flex items-center justify-center px-4 pt-6 pb-4 bg-primary/70">
+            <SidebarHeaderComponent />
           </SidebarHeader>
 
+          <div className="px-4 pb-2 bg-primary/70">
+            <Separator className="bg-white/20" />
+          </div>
+
           <SidebarContent>
-            <SidebarMenu className="px-2 mt-4">
+            <SidebarMenu className="px-2 mt-2 space-y-0.5">
               {/* Visão Geral */}
               {topItems.map(item => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.path}
-                    tooltip={item.label}
-                    className="h-11 hover:bg-primary/5 data-[active=true]:bg-primary/10"
-                  >
-                    <Link href={item.path} className="flex items-center gap-3">
-                      <item.icon className={`w-5 h-5 ${pathname === item.path ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <span className={`font-bold uppercase text-[11px] tracking-wider ${pathname === item.path ? 'text-primary' : 'text-muted-foreground'}`}>
-                        {item.label}
-                      </span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <SimpleMenuItem
+                  key={item.path}
+                  icon={item.icon}
+                  label={item.label}
+                  path={item.path}
+                  isActive={pathname === item.path}
+                />
               ))}
 
-              {/* Vendas — grupo expansível */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  tooltip="Vendas"
-                  isActive={isVendasActive}
-                  className="h-11 hover:bg-primary/5 data-[active=true]:bg-primary/10 cursor-pointer"
-                  onClick={() => setVendasOpen(v => !v)}
-                >
-                  <TrendingUp className={`w-5 h-5 ${isVendasActive ? 'text-primary' : 'text-muted-foreground'}`} />
-                  <span className={`font-bold uppercase text-[11px] tracking-wider flex-1 ${isVendasActive ? 'text-primary' : 'text-muted-foreground'}`}>
-                    Vendas
-                  </span>
-                  {vendasOpen
-                    ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground group-data-[collapsible=icon]:hidden" />
-                    : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground group-data-[collapsible=icon]:hidden" />
-                  }
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Subitens de Vendas */}
-              {vendasOpen && vendasSubItems.map(item => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.path}
-                    tooltip={item.label}
-                    className="h-10 pl-8 hover:bg-primary/5 data-[active=true]:bg-primary/10 group-data-[collapsible=icon]:pl-0"
-                  >
-                    <Link href={item.path} className="flex items-center gap-3">
-                      <item.icon className={`w-4 h-4 ${pathname === item.path ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <span className={`font-bold uppercase text-[10px] tracking-wider ${pathname === item.path ? 'text-primary' : 'text-muted-foreground'}`}>
-                        {item.label}
-                      </span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+              {/* Categorias principais */}
+              {mainCategories.map(category => (
+                <SimpleMenuItem
+                  key={category.path}
+                  icon={category.icon}
+                  label={category.label}
+                  path={category.path}
+                  isActive={category.isActive}
+                />
               ))}
-
-              {/* Produção — grupo expansível */}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  tooltip="Produção"
-                  isActive={isProducaoActive}
-                  className="h-11 hover:bg-primary/5 data-[active=true]:bg-primary/10 cursor-pointer"
-                  onClick={() => setProducaoOpen(v => !v)}
-                >
-                  <Factory className={`w-5 h-5 ${isProducaoActive ? 'text-primary' : 'text-muted-foreground'}`} />
-                  <span className={`font-bold uppercase text-[11px] tracking-wider flex-1 ${isProducaoActive ? 'text-primary' : 'text-muted-foreground'}`}>
-                    Produção
-                  </span>
-                  {producaoOpen
-                    ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground group-data-[collapsible=icon]:hidden" />
-                    : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground group-data-[collapsible=icon]:hidden" />
-                  }
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Subitens de Produção */}
-              {producaoOpen && producaoSubItems.map(item => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.path}
-                    tooltip={item.label}
-                    className="h-10 pl-8 hover:bg-primary/5 data-[active=true]:bg-primary/10 group-data-[collapsible=icon]:pl-0"
-                  >
-                    <Link href={item.path} className="flex items-center gap-3">
-                      <item.icon className={`w-4 h-4 ${pathname === item.path ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <span className={`font-bold uppercase text-[10px] tracking-wider ${pathname === item.path ? 'text-primary' : 'text-muted-foreground'}`}>
-                        {item.label}
-                      </span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-
-
-
-
 
               {/* Restante do menu */}
+              <Separator className="my-3 bg-white/10" />
               {bottomItems.map(item => (
-                <SidebarMenuItem key={item.path}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname === item.path}
-                    tooltip={item.label}
-                    className="h-11 hover:bg-primary/5 data-[active=true]:bg-primary/10"
-                  >
-                    <Link href={item.path} className="flex items-center gap-3">
-                      <item.icon className={`w-5 h-5 ${pathname === item.path ? 'text-primary' : 'text-muted-foreground'}`} />
-                      <span className={`font-bold uppercase text-[11px] tracking-wider ${pathname === item.path ? 'text-primary' : 'text-muted-foreground'}`}>
-                        {item.label}
-                      </span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <SimpleMenuItem
+                  key={item.path}
+                  icon={item.icon}
+                  label={item.label}
+                  path={item.path}
+                  isActive={pathname === item.path}
+                />
               ))}
             </SidebarMenu>
           </SidebarContent>
 
-          <SidebarFooter className="p-4">
-            <Separator className="mb-4" />
-            <div className="flex flex-col gap-2 group-data-[collapsible=icon]:items-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start gap-3 text-destructive hover:text-destructive hover:bg-destructive/5 font-bold uppercase text-[10px]"
-                onClick={signOut}
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="group-data-[collapsible=icon]:hidden">Sair do Sistema</span>
-              </Button>
-            </div>
+          <SidebarFooter className="p-4 border-t border-primary/80 bg-primary/70">
+            <SidebarFooterComponent onSignOut={signOut} />
           </SidebarFooter>
         </Sidebar>
 
         <SidebarInset>
-          <header className="h-14 md:h-16 flex items-center border-b px-4 md:px-6 bg-white/80 backdrop-blur-md sticky top-0 z-20 no-print">
-            <SidebarTrigger />
-            <div className="flex-1 px-3 md:px-4">
-              <h1 className="text-xs font-black uppercase tracking-[0.2em] text-primary/60 truncate">
-                {currentLabel}
-              </h1>
+          <header className="h-14 flex items-center border-b border-primary/80 px-4 md:px-6 bg-primary sticky top-0 z-20 no-print shadow-sm">
+            <SidebarTrigger className="text-white hover:bg-white/10 mr-2" />
+            <div className="flex-1 px-3 md:px-4 flex items-center gap-1.5 text-xs font-medium text-white/70 uppercase tracking-wider">
+              <Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link>
+              
+              {pathname !== '/dashboard' && pathname.split('/').slice(2).map((segment, idx, arr) => {
+                const isLast = idx === arr.length - 1;
+                const path = `/dashboard/${arr.slice(0, idx + 1).join('/')}`;
+                return (
+                  <React.Fragment key={path}>
+                    <ChevronRight className="w-3 h-3 text-white/40" />
+                    {isLast ? (
+                      <span className="text-white/95 font-semibold text-white/90">{segment.replace('-', ' ')}</span>
+                    ) : (
+                      <Link href={path} className="hover:text-white transition-colors">{segment.replace('-', ' ')}</Link>
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </div>
+            {user && <NotificationCenter userId={user.id} />}
           </header>
-          <main className="flex-1 p-3 md:p-6 overflow-auto bg-slate-50/50">
+          <main className="flex-1 p-6 overflow-auto bg-slate-50/50">
             {children}
           </main>
         </SidebarInset>

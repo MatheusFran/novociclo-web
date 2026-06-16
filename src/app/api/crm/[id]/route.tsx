@@ -14,19 +14,31 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         const current = await prisma.crmPipeline.findUnique({ where: { id } });
         if (!current) return NextResponse.json({ error: 'Pipeline não encontrado' }, { status: 404 });
 
-        const novaColuna = data.coluna; // as CrmColuna;
+        const updateData: any = {
+            objetivo: data.objetivo,
+            canal: data.canal,
+            proximaAcao: data.proximaAcao,
+            statusCrm: data.statusCrm,
+            resultado: data.resultado,
+            valorRecuperado: data.valorRecuperado,
+            observacao: data.observacao,
+            nomeContato: data.nomeContato,
+            ultimoContato: data.ultimoContato,
+        };
+
+        if (data.coluna && data.coluna !== current.coluna) {
+            updateData.coluna = data.coluna;
+            updateData.movimentos = {
+                create: {
+                    colunaAnterior: current.coluna,
+                    colunaAtual: data.coluna,
+                },
+            };
+        }
 
         const updated = await prisma.crmPipeline.update({
             where: { id },
-            data: {
-                coluna: novaColuna,
-                movimentos: {
-                    create: {
-                        colunaAnterior: current.coluna,
-                        colunaAtual: novaColuna,
-                    },
-                },
-            },
+            data: updateData,
             include: { customer: true, movimentos: true },
         });
 

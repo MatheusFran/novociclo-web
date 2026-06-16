@@ -20,6 +20,7 @@ export interface AuthState {
 export type OrderStatus =
   | 'PENDENTE'
   | 'PRODUCAO'
+  | 'FINANCEIRO'
   | 'PRONTO_LOGISTICA'
   | 'ENTREGA'
   | 'AGUARDANDO_FATURAMENTO'
@@ -262,6 +263,18 @@ export interface Order {
   grupoCarga?: string;
   tipoCarga?: string;
   dataCarregamento?: string;
+
+  // Financeiro
+  approvedByFinance?: string;
+  approvedByFinanceUser?: string;
+  rejectionReason?: string;
+  rejectedBy?: string;
+
+  // Descarga e Entrega
+  meioDescarga?: 'PROPRIO' | 'AJUDANTE_EXTERNO' | 'EMPILHADEIRA';
+  responsavelDescarga?: 'CLIENTE' | 'LOTUS';
+  dataHoraDescarga?: string;
+  especificidadesEntrega?: string;
 }
 
 export interface Vehicle {
@@ -366,6 +379,16 @@ export interface CrmPipeline {
   customerId: string;
   objetivo: string;
   coluna: CrmColuna;
+
+  canal?: string | null;
+  proximaAcao?: string | null;
+  statusCrm?: string | null;
+  resultado?: string | null;
+  valorRecuperado?: number | null;
+  observacao?: string | null;
+  nomeContato?: string | null;
+  ultimoContato?: string | null;
+
   createdAt: string;
   updatedAt: string;
 

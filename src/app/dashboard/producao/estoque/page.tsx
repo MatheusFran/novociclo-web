@@ -17,7 +17,11 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select';
 import {
-    BarChart3, History, Plus, Search, Download, AlertTriangle, TrendingUp, TrendingDown, Loader2
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+    AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+    BarChart3, History, Plus, Search, Download, AlertTriangle, TrendingUp, TrendingDown, Loader2, Trash2
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useState, useMemo, useEffect } from 'react';
@@ -50,6 +54,9 @@ export default function EstoqueLogisticaPage() {
     const [filterType, setFilterType] = useState<'TODAS' | 'ENTRADA' | 'SAIDA'>('TODAS');
     const [historicoDe, setHistoricoDe] = useState('');
     const [historicoAte, setHistoricoAte] = useState('');
+    const [userRole, setUserRole] = useState<string | null>(null);
+    const [movementToDelete, setMovementToDelete] = useState<string | null>(null);
+    const [isDeletingMovement, setIsDeletingMovement] = useState(false);
 
     // Estados do formulário de entrada
     const [formProductId, setFormProductId] = useState('');
@@ -105,7 +112,49 @@ export default function EstoqueLogisticaPage() {
         }
     }, [isReady]);
 
-    // ── Calcular movimentações de estoque ──
+    // ── Carregar role do usuário ──
+    useEffect(() => {
+        const fetchUserRole = async () => {
+            try {
+                const response = await fetch('/api/users/me');
+                if (response.ok) {
+                    const data = await response.json();
+                    setUserRole(data.role);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar role do usuário:', error);
+            }
+        };
+        fetchUserRole();
+    }, []);
+
+    // ── Deletar movimentação de estoque ──
+    const handleDeleteMovement = async (movementId: string) => {
+        try {
+            setIsDeletingMovement(true);
+            const res = await fetch(`/api/stock-movements/${movementId}`, {
+                method: 'DELETE',
+            });
+
+            if (!res.ok) {
+                throw new Error('Erro ao deletar movimentação');
+            }
+
+            setMovimentacoesAPI(prev => prev.filter(m => m.id !== movementId));
+            toast({ title: "Sucesso", description: "Movimentação deletada com sucesso" });
+            setMovementToDelete(null);
+        } catch (error) {
+            toast({
+                variant: "destructive",
+                title: "Erro ao deletar",
+                description: error instanceof Error ? error.message : "Falha ao deletar movimentação.",
+            });
+        } finally {
+            setIsDeletingMovement(false);
+        }
+    };
+
+    const isAdmin = userRole === 'ADMIN';
     // Usa apenas movimentações da API (saídas automáticas são criadas lá)
     const movimentacoes = useMemo(() => {
         return [...movimentacoesAPI].sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime());
@@ -472,6 +521,7 @@ export default function EstoqueLogisticaPage() {
                                             <th className="text-[9px] font-black uppercase text-center px-4 py-3">Quantidade</th>
                                             <th className="text-[9px] font-black uppercase text-center px-4 py-3">Motivo</th>
                                             <th className="text-[9px] font-black uppercase text-center px-4 py-3">Data</th>
+                                            {isAdmin && <th className="text-[9px] font-black uppercase text-center px-4 py-3">Ações</th>}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -489,6 +539,18 @@ export default function EstoqueLogisticaPage() {
                                                 <td className="px-4 py-3 text-center text-[9px] font-bold text-muted-foreground">
                                                     {format(new Date(mov.date), 'dd/MM/yyyy HH:mm')}
                                                 </td>
+                                                {isAdmin && (
+                                                    <td className="px-4 py-3 text-center">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-red-600 hover:bg-red-50 h-6 px-2"
+                                                            onClick={() => setMovementToDelete(mov.id)}
+                                                        >
+                                                            <Trash2 className="w-3 h-3" />
+                                                        </Button>
+                                                    </td>
+                                                )}
                                             </tr>
                                         ))}
                                     </tbody>
@@ -648,6 +710,28 @@ export default function EstoqueLogisticaPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* ── ALERT DIALOG: CONFIRMAÇÃO DE EXCLUSÃO ── */}
+            <AlertDialog open={!!movementToDelete} onOpenChange={open => !open && setMovementToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Deletar Movimentação</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Tem certeza que deseja deletar esta movimentação de estoque? Esta ação não pode ser desfeita.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-red-600 hover:bg-red-700"
+                            onClick={() => movementToDelete && handleDeleteMovement(movementToDelete)}
+                            disabled={isDeletingMovement}
+                        >
+                            {isDeletingMovement ? 'Deletando...' : 'Deletar'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

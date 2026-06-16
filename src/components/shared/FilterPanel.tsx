@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search } from 'lucide-react';
+import { Search, RotateCcw } from 'lucide-react';
 import { ReactNode } from 'react';
 
 export interface FilterField {
@@ -36,22 +36,22 @@ export function FilterPanel({
   showClearButton = true,
 }: FilterPanelProps) {
   return (
-    <div className={`bg-white border rounded-xl ${compact ? 'p-3' : 'p-4'} space-y-3`}>
+    <div className={`bg-white border border-slate-200 rounded-md ${compact ? 'p-3' : 'p-4 lg:p-5'} space-y-3 shadow-sm`}>
       {title && (
-        <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
           {title}
         </p>
       )}
 
-      <div className={`grid ${gridCols} gap-2`}>
+      <div className={`grid ${gridCols} gap-3`}>
         {fields.map(field => (
           <div key={field.key} className={field.className}>
             {field.type === 'search' && (
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 <Input
                   placeholder={field.placeholder || 'Buscar...'}
-                  className="pl-8 h-8 text-[12px] sm:text-xs font-bold"
+                  className="pl-9 h-9 text-xs border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/20 rounded-md"
                   value={field.value}
                   onChange={e => field.onChange(e.target.value)}
                 />
@@ -60,7 +60,7 @@ export function FilterPanel({
 
             {field.type === 'select' && (
               <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger className="h-8 text-[12px] sm:text-xs">
+                <SelectTrigger className="h-9 text-xs rounded-md border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/20">
                   <SelectValue placeholder={field.placeholder || 'Selecionar'} />
                 </SelectTrigger>
                 <SelectContent>
@@ -76,7 +76,7 @@ export function FilterPanel({
             {field.type === 'date' && (
               <Input
                 type="date"
-                className="h-8 text-[11px] sm:text-xs"
+                className="h-9 text-xs rounded-md border-slate-200 focus:border-emerald-500 focus:ring-emerald-500/20"
                 value={field.value}
                 onChange={e => field.onChange(e.target.value)}
               />
@@ -91,9 +91,10 @@ export function FilterPanel({
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 text-[9px] sm:text-[10px] font-black uppercase text-muted-foreground"
+          className="h-8 text-xs font-semibold uppercase text-slate-500 hover:text-slate-800 hover:bg-slate-100 gap-2 rounded-md transition-all"
           onClick={onClear}
         >
+          <RotateCcw className="w-3 h-3" />
           Limpar Filtros
         </Button>
       )}
