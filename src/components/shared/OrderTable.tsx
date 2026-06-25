@@ -121,6 +121,7 @@ export interface OrderTableProps {
   showFilters?: boolean;
   showGroupByCity?: boolean;
   showExport?: boolean;
+  showAnalytics?: boolean;
   exportFileName?: string;
 }
 
@@ -153,6 +154,7 @@ export function OrderTable({
   members = [],
   statusMap = {},
   showTotals = false,
+  showAnalytics = false,
   showSearch = false,
   showFilters = false,
   showGroupByCity = false,
@@ -197,6 +199,27 @@ export function OrderTable({
 
   useEffect(() => { setPage(1); }, [search, statusFilter, cityFilter, sellerFilter, closingPersonFilter, dateRange, groupByCity]);
 
+
+  const totalReceita = useMemo(
+    () => filteredOrders.reduce((acc, o) => acc + (o.totalValue || 0), 0),
+    [filteredOrders]
+  );
+
+  const totalQuantidade = useMemo(
+    () =>
+      filteredOrders.reduce(
+        (acc, o) =>
+          acc +
+          (o.items?.reduce((total, item) => total + item.quantity, 0) || 0),
+        0
+      ),
+    [filteredOrders]
+  );
+
+  const totalPeso = useMemo(
+    () => filteredOrders.reduce((acc, o) => acc + (o.totalWeight || 0), 0),
+    [filteredOrders]
+  );
   // ── Agrupamento + Paginação ─────────────────────────────────────────────────
   const groupedOrders = useMemo(() => {
     const start = (page - 1) * pageSize;
@@ -238,6 +261,48 @@ export function OrderTable({
     <div className="space-y-4">
 
       {/* Cards de totais */}
+      {showAnalytics && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs font-bold uppercase text-muted-foreground">
+                Receita Total
+              </p>
+              <p className="text-2xl font-black text-green-600">
+                R$ {totalReceita.toLocaleString('pt-BR', {
+                  minimumFractionDigits: 2,
+                })}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs font-bold uppercase text-muted-foreground">
+                Quantidade Total
+              </p>
+              <p className="text-2xl font-black">
+                {totalQuantidade.toLocaleString('pt-BR')}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs font-bold uppercase text-muted-foreground">
+                Peso Total
+              </p>
+              <p className="text-2xl font-black text-blue-600">
+                {totalPeso.toLocaleString('pt-BR', {
+                  minimumFractionDigits: 1,
+                  maximumFractionDigits: 1,
+                })}{' '}
+                KG
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
       {showTotals && (
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           {[
@@ -432,8 +497,8 @@ export function OrderTable({
                 variant="outline"
                 size="sm"
                 className={`h-9 gap-2 text-[11px] font-semibold uppercase tracking-wide rounded-lg transition-colors ${groupByCity
-                    ? 'bg-zinc-900 border-zinc-900 text-white hover:bg-zinc-800'
-                    : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-800'
+                  ? 'bg-zinc-900 border-zinc-900 text-white hover:bg-zinc-800'
+                  : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-800'
                   }`}
                 onClick={() => setGroupByCity(!groupByCity)}
               >

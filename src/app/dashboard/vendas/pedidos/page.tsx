@@ -220,7 +220,7 @@ function OrderFormModal({
   const [priceList, setPriceList] = useState(priceTables[0]?.id || 'PADRAO');
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [createdAt, setCreatedAt] = useState('');
-  
+
   // Descarga e Entrega
   const [meioDescarga, setMeioDescarga] = useState('');
   const [responsavelDescarga, setResponsavelDescarga] = useState('');
@@ -709,8 +709,11 @@ export default function PedidosPage() {
     );
   }
 
+
+
   return (
     <div className="space-y-6 px-2 sm:px-0">
+
       {/* ── Cabeçalho da Página ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -736,6 +739,7 @@ export default function PedidosPage() {
         showFilters
         showGroupByCity
         showExport
+        showAnalytics
         exportFileName="Relatorio_Pedidos"
         onRowClick={o => router.push(`/dashboard/vendas/pedidos/${o.id}`)}
         columns={[
@@ -878,8 +882,8 @@ export default function PedidosPage() {
                     <p className="text-sm font-semibold text-blue-600">Descarga e Entrega:</p>
                     {selectedOrder?.meioDescarga && <p><b>Meio:</b> {
                       selectedOrder.meioDescarga === 'PROPRIO' ? '🏢 Próprio' :
-                      selectedOrder.meioDescarga === 'AJUDANTE_EXTERNO' ? '👷 Externo' :
-                      '🏗️ Empilhadeira'
+                        selectedOrder.meioDescarga === 'AJUDANTE_EXTERNO' ? '👷 Externo' :
+                          '🏗️ Empilhadeira'
                     }</p>}
                     {selectedOrder?.responsavelDescarga && <p><b>Responsável:</b> {
                       selectedOrder.responsavelDescarga === 'CLIENTE' ? '👤 Cliente' : '🏪 Lotus'
@@ -938,14 +942,14 @@ export default function PedidosPage() {
               <>
                 <p><b>Meio de Descarga:</b> {
                   selectedOrder?.meioDescarga === 'PROPRIO' ? '🏢 Próprio' :
-                  selectedOrder?.meioDescarga === 'AJUDANTE_EXTERNO' ? '👷 Ajudante Externo' :
-                  selectedOrder?.meioDescarga === 'EMPILHADEIRA' ? '🏗️ Empilhadeira' :
-                  '---'
+                    selectedOrder?.meioDescarga === 'AJUDANTE_EXTERNO' ? '👷 Ajudante Externo' :
+                      selectedOrder?.meioDescarga === 'EMPILHADEIRA' ? '🏗️ Empilhadeira' :
+                        '---'
                 }</p>
                 <p><b>Responsável:</b> {
                   selectedOrder?.responsavelDescarga === 'CLIENTE' ? '👤 Cliente' :
-                  selectedOrder?.responsavelDescarga === 'LOTUS' ? '🏪 Lotus' :
-                  '---'
+                    selectedOrder?.responsavelDescarga === 'LOTUS' ? '🏪 Lotus' :
+                      '---'
                 }</p>
                 <p><b>Data/Hora Descarga:</b> {selectedOrder?.dataHoraDescarga ? new Date(selectedOrder.dataHoraDescarga).toLocaleString() : '---'}</p>
                 <p><b>Observações Entrega:</b> {selectedOrder?.especificidadesEntrega || '---'}</p>
@@ -960,7 +964,7 @@ export default function PedidosPage() {
                 <p><b>Venda Direta:</b> {selectedOrder?.vendaDiretaNumero || '---'}</p>
                 <p><b>Faturado em:</b> {selectedOrder?.invoicedAt ? new Date(selectedOrder.invoicedAt).toLocaleString() : '---'}</p>
                 {selectedOrder?.rejectionReason && (
-                  <p style={{color: '#ef4444'}}><b>❌ Motivo Rejeição:</b> {selectedOrder.rejectionReason}</p>
+                  <p style={{ color: '#ef4444' }}><b>❌ Motivo Rejeição:</b> {selectedOrder.rejectionReason}</p>
                 )}
                 <p><b>Rejeitado em:</b> {selectedOrder?.rejectedAt ? new Date(selectedOrder.rejectedAt).toLocaleString() : '---'}</p>
               </>
